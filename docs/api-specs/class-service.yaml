@@ -1,0 +1,193 @@
+openapi: 3.0.3
+info:
+  title: Class Service API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8087
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/v1/classes:
+    post:
+      summary: Create class
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClassRequest'
+      responses:
+        '201':
+          description: Created
+    get:
+      summary: List classes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+  /api/v1/classes/{id}:
+    get:
+      summary: Get class details
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/v1/classes/join:
+    post:
+      summary: Join class by join code (student self-enroll)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinClassRequest'
+      responses:
+        '200':
+          description: Joined
+        '404':
+          description: Invalid code
+        '409':
+          description: Already enrolled
+  /api/v1/classes/{id}/regenerate-join-code:
+    post:
+      summary: Regenerate join code (class teacher only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: New code returned in ClassResponse
+  /api/v1/classes/{id}/add-user:
+    post:
+      summary: Add user to class
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddUserToClassRequest'
+      responses:
+        '200':
+          description: User added
+  /api/v1/classes/{id}/students:
+    get:
+      summary: Get students by class
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/v1/classes/{id}/students/{userId}:
+    delete:
+      summary: Remove student from class (class teacher or admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User removed
+  /api/v1/users/{userId}/classes:
+    get:
+      summary: Get classes by user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    CreateClassRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+    JoinClassRequest:
+      type: object
+      required: [joinCode]
+      properties:
+        joinCode:
+          type: string
+          description: 8-character code (case-insensitive); shown to the class teacher
+    ClassResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        teacherId:
+          type: string
+        joinCode:
+          type: string
+          description: Only when viewer is the class teacher (or right after create)
+        joinUrl:
+          type: string
+          description: Optional deep link when CLASS_JOIN_URL_BASE is configured
+    AddUserToClassRequest:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        userEmail:
+          type: string
+          format: email
+          description: Optional; forwarded to notification service for email delivery

@@ -1,0 +1,212 @@
+openapi: 3.0.3
+info:
+  title: Question Service API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8083
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/v1/questions:
+    post:
+      summary: Create question
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQuestionRequest'
+      responses:
+        '201':
+          description: Created
+    get:
+      summary: List questions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+  /api/v1/questions/bank:
+    get:
+      summary: Get question bank
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: category
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/v1/questions/bank/categories:
+    get:
+      summary: Get question categories
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+  /api/v1/questions/import:
+    post:
+      summary: Import questions from CSV/Excel
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: examId
+          required: false
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Questions imported
+  /api/v1/questions/generate:
+    post:
+      summary: Generate basic AI questions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: examId
+          required: false
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateQuestionRequest'
+      responses:
+        '201':
+          description: Questions generated
+  /api/v1/questions/{id}:
+    get:
+      summary: Get question by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+    put:
+      summary: Update question
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+    delete:
+      summary: Delete question
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/v1/questions/exam/{examId}:
+    get:
+      summary: Get questions by exam ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+  /api/v1/questions/exam/{examId}/answers:
+    get:
+      summary: Get answer keys by exam ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    CreateQuestionRequest:
+      type: object
+      required: [content, optionA, optionB, optionC, optionD, correctAnswer]
+      properties:
+        content:
+          type: string
+        optionA:
+          type: string
+        optionB:
+          type: string
+        optionC:
+          type: string
+        optionD:
+          type: string
+        correctAnswer:
+          type: string
+          enum: [A, B, C, D]
+    GenerateQuestionRequest:
+      type: object
+      required: [topic, count]
+      properties:
+        topic:
+          type: string
+        count:
+          type: integer
+          minimum: 1
+          maximum: 20

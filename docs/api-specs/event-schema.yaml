@@ -1,0 +1,138 @@
+openapi: 3.0.3
+info:
+  title: Quiz Event Schema
+  version: 1.1.0
+paths: {}
+components:
+  schemas:
+    EmailVerificationRequestedEvent:
+      type: object
+      required:
+        - eventId
+        - userId
+        - email
+        - verificationCode
+        - expiresAt
+      properties:
+        eventId:
+          type: string
+          description: Unique event identifier (UUID)
+        userId:
+          type: string
+        email:
+          type: string
+          format: email
+        verificationCode:
+          type: string
+          description: 6-digit verification code
+        expiresAt:
+          type: string
+          format: date-time
+
+    ExamSubmittedEvent:
+      type: object
+      required:
+        - eventId
+        - eventType
+        - occurredAt
+        - userId
+        - examId
+        - examTitle
+        - resultId
+        - score
+        - totalQuestions
+        - submittedAt
+      properties:
+        eventId:
+          type: string
+          description: Unique event identifier (UUID)
+        eventType:
+          type: string
+          enum: [exam.submitted]
+        occurredAt:
+          type: string
+          format: date-time
+        userId:
+          type: string
+        userEmail:
+          type: string
+          format: email
+          nullable: true
+        examId:
+          type: string
+        examTitle:
+          type: string
+        resultId:
+          type: integer
+          format: int64
+        score:
+          type: integer
+          minimum: 0
+        totalQuestions:
+          type: integer
+          minimum: 0
+        submittedAt:
+          type: string
+          format: date-time
+
+    UserAddedToClassEvent:
+      type: object
+      required:
+        - eventId
+        - eventType
+        - occurredAt
+        - userId
+        - classId
+        - className
+      properties:
+        eventId:
+          type: string
+        eventType:
+          type: string
+          enum: [class.user.added]
+        occurredAt:
+          type: string
+          format: date-time
+        userId:
+          type: string
+        userEmail:
+          type: string
+          format: email
+          nullable: true
+        classId:
+          type: string
+        className:
+          type: string
+
+    ExamCreatedEvent:
+      type: object
+      required:
+        - eventId
+        - eventType
+        - occurredAt
+        - examId
+        - classId
+        - title
+        - createdBy
+        - notifyUserIds
+      properties:
+        eventId:
+          type: string
+        eventType:
+          type: string
+          enum: [exam.created]
+        occurredAt:
+          type: string
+          format: date-time
+        examId:
+          type: string
+        classId:
+          type: string
+        title:
+          type: string
+        createdBy:
+          type: string
+        notifyUserIds:
+          type: array
+          items:
+            type: string

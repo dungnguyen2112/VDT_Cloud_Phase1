@@ -1,0 +1,434 @@
+# Docker Compose — Multi-container orchestration
+# Run: docker compose up --build
+# Docs: https://docs.docker.com/compose/
+
+services:
+  # ─── Eureka Service Registry (Service Discovery) ─
+  eureka-server:
+    build: ./eureka-server
+    ports:
+      - "${EUREKA_PORT}:8761"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8761/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ─── Auth DB ─────────────────────────────────────
+  auth-db:
+    image: mysql:8.4
+    ports:
+      - "${AUTH_DB_PORT}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${AUTH_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${AUTH_DB_NAME}
+    volumes:
+      - ./docs/database/auth_service_schema.sql:/docker-entrypoint-initdb.d/01-auth_service_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    networks:
+      - app-network
+
+  # ─── Exam DB ─────────────────────────────────────
+  exam-db:
+    image: mysql:8.4
+    ports:
+      - "${EXAM_DB_PORT}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${EXAM_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${EXAM_DB_NAME}
+    volumes:
+      - ./docs/database/exam_service_schema.sql:/docker-entrypoint-initdb.d/01-exam_service_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    networks:
+      - app-network
+
+  # ─── Question DB (isolated from exam/auth DB) ─
+  question-db:
+    image: mysql:8.4
+    ports:
+      - "${QUESTION_DB_PORT}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${QUESTION_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${QUESTION_DB_NAME}
+    volumes:
+      - ./docs/database/question_quiz_schema.sql:/docker-entrypoint-initdb.d/01-question_quiz_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    networks:
+      - app-network
+
+  # ─── Result DB ─────────────────────────────────────
+  result-db:
+    image: mysql:8.4
+    ports:
+      - "${RESULT_DB_PORT:-3309}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${RESULT_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${RESULT_DB_NAME}
+    volumes:
+      - ./docs/database/result_service_schema.sql:/docker-entrypoint-initdb.d/01-result_service_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    networks:
+      - app-network
+
+
+  # ─── Class DB ────────────────────────────────────
+  class-db:
+    image: mysql:8.4
+    ports:
+      - "${CLASS_DB_PORT:-3311}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${CLASS_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${CLASS_DB_NAME}
+    volumes:
+      - ./docs/database/class_service_schema.sql:/docker-entrypoint-initdb.d/01-class_service_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    networks:
+      - app-network
+
+  # ─── Notification DB ─────────────────────────────
+  notification-db:
+    image: mysql:8.4
+    ports:
+      - "${NOTIFICATION_DB_PORT:-3312}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${NOTIFICATION_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${NOTIFICATION_DB_NAME}
+    volumes:
+      - ./docs/database/notification_service_schema.sql:/docker-entrypoint-initdb.d/01-notification_service_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    networks:
+      - app-network
+
+  # ─── Redis ────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app-network
+
+  # ─── Auth Service ────────────────────────────────
+  auth-service:
+    build: ./services/auth-service
+    ports:
+      - "${AUTH_SERVICE_PORT}:8081"
+    environment:
+      SERVER_PORT: 8081
+      DB_URL: jdbc:mysql://auth-db:3306/${AUTH_DB_NAME}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      auth-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ─── Exam Service ────────────────────────────────
+  exam-service:
+    build: ./services/exam-service
+    expose:
+      - "8082"
+    environment:
+      SERVER_PORT: 8082
+      SPRING_CACHE_TYPE: none
+      DB_URL: jdbc:mysql://exam-db:3306/${EXAM_DB_NAME}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      exam-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ─── Question Service ────────────────────────────
+  question-service:
+    build: ./services/question-service
+    expose:
+      - "8083"
+    environment:
+      SERVER_PORT: 8083
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      DB_URL: jdbc:mysql://question-db:3306/${QUESTION_DB_NAME}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET}
+      AI_PROVIDER: ${AI_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite-preview}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      GEMINI_TIMEOUT_SECONDS: ${GEMINI_TIMEOUT_SECONDS:-60}
+      OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-60}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      question-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ─── Result Service ────────────────────────────────
+  result-service:
+    build: ./services/result-service
+    expose:
+      - "8084"
+    environment:
+      SERVER_PORT: 8084
+      DB_URL: jdbc:mysql://result-db:3306/${RESULT_DB_NAME}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      result-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ─── Notification Service ──────────────────────────
+  notification-service:
+    build: ./services/notification-service
+    expose:
+      - "8086"
+    environment:
+      SERVER_PORT: 8086
+      JWT_SECRET: ${JWT_SECRET}
+      DB_URL: jdbc:mysql://notification-db:3306/${NOTIFICATION_DB_NAME:-notification_service_db}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_EMAIL: ${MAIL_FROM_EMAIL:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-E-Mid Quiz System}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      notification-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8086/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+
+  # ─── Class Service ───────────────────────────────
+  class-service:
+    build: ./services/class-service
+    expose:
+      - "8087"
+    environment:
+      SERVER_PORT: 8087
+      DB_URL: jdbc:mysql://class-db:3306/${CLASS_DB_NAME:-class_service_db}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      class-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8087/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ─── API Gateway ─────────────────────────────────
+  gateway:
+    build: ./gateway
+    ports:
+      - "${GATEWAY_PORT}:8080"
+    environment:
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:*,http://127.0.0.1:*}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      exam-service:
+        condition: service_healthy
+      question-service:
+        condition: service_healthy
+      class-service:
+        condition: service_healthy
+      result-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ─── Frontend ─
+  frontend:
+    build: ./frontend
+    ports:
+      - "${FRONTEND_PORT}:3000"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # ─── Shared Infrastructure (uncomment as needed) ─
+  # db:
+  #   image: postgres:16-alpine    # or mysql:8, mongo:7, etc.
+  #   ports:
+  #     - "${DB_PORT:-5432}:5432"
+  #   environment:
+  #     POSTGRES_DB: ${DB_NAME:-mydb}
+  #     POSTGRES_USER: ${DB_USER:-admin}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+  #   volumes:
+  #     - db-data:/var/lib/postgresql/data
+  #   networks:
+  #     - app-network
+
+  # redis-server:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - app-network
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+# volumes:
+#   db-data:

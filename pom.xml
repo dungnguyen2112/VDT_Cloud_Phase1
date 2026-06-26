@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.quiz</groupId>
+    <artifactId>online-quiz-system</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>online-quiz-system</name>
+
+    <modules>
+        <module>eureka-server</module>
+        <module>gateway</module>
+        <module>services/auth-service</module>
+        <module>services/class-service</module>
+        <module>services/exam-service</module>
+        <module>services/question-service</module>
+        <module>services/result-service</module>
+        <module>services/notification-service</module>
+    </modules>
+</project>

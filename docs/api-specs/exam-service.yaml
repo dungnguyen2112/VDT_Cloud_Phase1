@@ -1,0 +1,302 @@
+openapi: 3.0.3
+info:
+  title: Exam Service API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8082
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/v1/exams:
+    post:
+      summary: Create exam
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExamRequest'
+      responses:
+        '201':
+          description: Created
+    get:
+      summary: List exams
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+  /api/v1/exams/my-classes:
+    get:
+      summary: List exams by authenticated user's classes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+  /api/v1/exams/{examId}:
+    get:
+      summary: Get exam details
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+    patch:
+      summary: Update exam metadata (owner only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateExamRequest'
+      responses:
+        '200':
+          description: OK
+    delete:
+      summary: Delete draft exam (owner only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+  /api/v1/exams/{examId}/publish:
+    post:
+      summary: Publish draft exam (notifies students)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Exam published
+  /api/v1/exams/{examId}/start:
+    post:
+      summary: Start exam and return metadata
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/v1/exams/{examId}/questions:
+    post:
+      summary: Attach question to exam
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachQuestionRequest'
+      responses:
+        '200':
+          description: Attached
+    get:
+      summary: Get randomized exam questions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamQuestionListResponse'
+  /api/v1/exams/{examId}/questions/bulk:
+    post:
+      summary: Attach multiple questions to exam
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachQuestionsBulkRequest'
+      responses:
+        '200':
+          description: Questions attached
+  /api/v1/exams/circuit-breakers:
+    get:
+      summary: Inspect current circuit breaker states and metrics
+      responses:
+        '200':
+          description: Snapshot retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timestamp:
+                    type: string
+                    format: date-time
+                  status:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        state:
+                          type: string
+                          example: CLOSED
+                        failureRate:
+                          type: number
+                          format: float
+                        slowCallRate:
+                          type: number
+                          format: float
+                        bufferedCalls:
+                          type: integer
+                        failedCalls:
+                          type: integer
+                        slowCalls:
+                          type: integer
+                        notPermittedCalls:
+                          type: integer
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    CreateExamRequest:
+      type: object
+      required: [title, classId, duration]
+      properties:
+        title:
+          type: string
+        classId:
+          type: string
+          format: uuid
+        duration:
+          type: integer
+    UpdateExamRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        duration:
+          type: integer
+        availableFrom:
+          type: string
+          format: date-time
+        availableUntil:
+          type: string
+          format: date-time
+        maxAttempts:
+          type: integer
+        showCorrectAnswers:
+          type: boolean
+        showScoreImmediately:
+          type: boolean
+    AttachQuestionRequest:
+      type: object
+      required: [questionId]
+      properties:
+        questionId:
+          type: string
+          format: uuid
+    AttachQuestionsBulkRequest:
+      type: object
+      required: [questionIds]
+      properties:
+        questionIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+    ExamQuestionResponse:
+      type: object
+      properties:
+        questionId:
+          type: string
+          format: uuid
+        content:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+        optionKeys:
+          type: array
+          description: Original option letters corresponding to each shuffled option position.
+          items:
+            type: string
+            enum: [A, B, C, D]
+    ExamQuestionListResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExamQuestionResponse'

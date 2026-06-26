@@ -1,0 +1,179 @@
+openapi: 3.0.3
+info:
+  title: Auth Service API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8081
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/v1/auth/register:
+    post:
+      summary: Register user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registration pending verification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationPendingResponse'
+  /api/v1/auth/login:
+    post:
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+  /api/v1/auth/me:
+    get:
+      summary: Get authenticated profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Profile returned
+  /api/v1/auth/verify-email:
+    post:
+      summary: Verify email using code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+      responses:
+        '200':
+          description: Email verified and JWT issued
+  /api/v1/auth/resend-verification:
+    post:
+      summary: Resend verification code for unverified account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendVerificationRequest'
+      responses:
+        '200':
+          description: Verification code resent
+  /api/v1/auth/lookup-user:
+    get:
+      summary: Resolve userId by email
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: email
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserLookupResponse'
+  /api/v1/auth/lookup-user-by-id:
+    get:
+      summary: Lookup user by id for showing class members
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserLookupResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [username, email, password, role]
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [ADMIN, INSTRUCTOR, STUDENT]
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    VerifyEmailRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+        code:
+          type: string
+
+    ResendVerificationRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+
+    RegistrationPendingResponse:
+      type: object
+      required: [email, expiresAt]
+      properties:
+        email:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+
+    UserLookupResponse:
+      type: object
+      required: [userId, username, email, role]
+      properties:
+        userId:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [ADMIN, INSTRUCTOR, STUDENT]

@@ -1,0 +1,277 @@
+openapi: 3.0.3
+info:
+  title: Result Service API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8084
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/v1/results/submit:
+    post:
+      summary: Submit exam result
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitAnswerRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseResponseExamResult'
+        '409':
+          description: Duplicate submission
+  /api/v1/results/exam/violation:
+    post:
+      summary: Report exam violation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ViolationRequest'
+      responses:
+        '200':
+          description: Violation reported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseResponseViolation'
+  /api/v1/results/exams/{examId}/violations:
+    get:
+      summary: Violation events timeline for an exam (owner only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: userId
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseResponseViolationEventList'
+  /api/v1/results/{userId}:
+    get:
+      summary: Get exam results by user ID (admin/instructor)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseResponseExamResultList'
+  /api/v1/results/me:
+    get:
+      summary: Get my exam results
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseResponseExamResultList'
+  /api/v1/results/exams/{examId}/report:
+    get:
+      summary: Exam results report (exam owner only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseResponseExamResultList'
+  /api/v1/results/exams/{examId}/report.csv:
+    get:
+      summary: Download exam results as CSV (exam owner only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: examId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    SubmitAnswerRequest:
+      type: object
+      required: [examId, answers]
+      properties:
+        examId:
+          type: string
+          format: uuid
+        answers:
+          type: object
+          additionalProperties:
+            type: string
+    ExamResultResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        userId:
+          type: string
+        examId:
+          type: string
+        score:
+          type: integer
+        totalQuestions:
+          type: integer
+        violationCount:
+          type: integer
+        submittedAt:
+          type: string
+          format: date-time
+    ViolationRequest:
+      type: object
+      required: [examId]
+      properties:
+        examId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          description: Optional anti-cheat event type (TAB_HIDDEN, FULLSCREEN_EXIT)
+          example: TAB_HIDDEN
+    ViolationEventResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        userId:
+          type: string
+        examId:
+          type: string
+          format: uuid
+        type:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ViolationResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+        examId:
+          type: string
+          format: uuid
+        violationCount:
+          type: integer
+    BaseResponseExamResult:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/ExamResultResponse'
+    BaseResponseExamResultList:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExamResultResponse'
+    BaseResponseViolation:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/ViolationResponse'
+    BaseResponseViolationEventList:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ViolationEventResponse'
+
