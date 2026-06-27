@@ -1,0 +1,300 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+  # Ở môi trường thực tế, 2 biến này sẽ được cấu hình ẩn trong giao diện Settings -> CI/CD -> Variables của GitLab.
+  HARBOR_USER: "admin"
+  HARBOR_PASSWORD: "admin"
+
+cache:
+  paths:
+    - .m2/repository/
+
+# ───────────────────────────────────────────────────────────────────────
+# STAGE 1: KIỂM THỬ CHẤT LƯỢNG (TEST) - CHO CẢ 7 DỊCH VỤ
+# ───────────────────────────────────────────────────────────────────────
+
+test-gateway:
+  stage: test
+  image: maven:3.8.5-openjdk-17
+  rules:
+    - changes:
+        - gateway/**/*
+  script:
+    - cd gateway
+    - chmod +x mvnw
+    - ./mvnw clean test
+
+test-auth-service:
+  stage: test
+  image: maven:3.8.5-openjdk-17
+  rules:
+    - changes:
+        - services/auth-service/**/*
+  script:
+    - cd services/auth-service
+    - chmod +x mvnw
+    - ./mvnw clean test
+
+test-class-service:
+  stage: test
+  image: maven:3.8.5-openjdk-17
+  rules:
+    - changes:
+        - services/class-service/**/*
+  script:
+    - cd services/class-service
+    - chmod +x mvnw
+    - ./mvnw clean test
+
+test-exam-service:
+  stage: test
+  image: maven:3.8.5-openjdk-17
+  rules:
+    - changes:
+        - services/exam-service/**/*
+  script:
+    - echo "=================================================="
+    - echo "🚀 Starting Quality Gate for exam-service..."
+    - echo "=================================================="
+    - cd services/exam-service
+    
+    # Run tests and intercept exit code
+    - set +e
+    - chmod +x mvnw
+    - ./mvnw clean test
+    - TEST_EXIT_CODE=$?
+    - set -e
+    
+    # Custom Quality Gate logic
+    - |
+      if [ $TEST_EXIT_CODE -ne 0 ]; then
+        echo ""
+        echo "=================================================================="
+        echo "❌ [QUALITY GATE FAILED]"
+        echo "Reason: Logic test cases or coding convention violated (Exit code: $TEST_EXIT_CODE)."
+        echo "Merging is BLOCKED. Please fix the failing tests before merging."
+        echo "=================================================================="
+        echo ""
+        exit 1
+      else
+        echo ""
+        echo "=================================================================="
+        echo "✅ [QUALITY GATE PASSED]"
+        echo "All tests passed successfully!"
+        echo "Merging is ALLOWED."
+        echo "=================================================================="
+        echo ""
+      fi
+
+test-question-service:
+  stage: test
+  image: maven:3.8.5-openjdk-17
+  rules:
+    - changes:
+        - services/question-service/**/*
+  script:
+    - cd services/question-service
+    - chmod +x mvnw
+    - ./mvnw clean test
+
+test-result-service:
+  stage: test
+  image: maven:3.8.5-openjdk-17
+  rules:
+    - changes:
+        - services/result-service/**/*
+  script:
+    - cd services/result-service
+    - chmod +x mvnw
+    - ./mvnw clean test
+
+test-notification-service:
+  stage: test
+  image: maven:3.8.5-openjdk-17
+  rules:
+    - changes:
+        - services/notification-service/**/*
+  script:
+    - cd services/notification-service
+    - chmod +x mvnw
+    - ./mvnw clean test
+
+# ───────────────────────────────────────────────────────────────────────
+# STAGE 2: ĐÓNG GÓI & ĐẨY ẢNH LÊN KHO CHỨA (BUILD & PUSH)
+# ───────────────────────────────────────────────────────────────────────
+
+build-gateway:
+  stage: build
+  rules:
+    - changes:
+        - gateway/**/*
+  needs:
+    - test-gateway
+  script:
+    - cd gateway
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
+    - docker build -t localhost:8000/root/gateway:latest .
+    - docker push localhost:8000/root/gateway:latest
+
+build-auth-service:
+  stage: build
+  rules:
+    - changes:
+        - services/auth-service/**/*
+  needs:
+    - test-auth-service
+  script:
+    - cd services/auth-service
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
+    - docker build -t localhost:8000/root/auth-service:latest .
+    - docker push localhost:8000/root/auth-service:latest
+
+build-class-service:
+  stage: build
+  rules:
+    - changes:
+        - services/class-service/**/*
+  needs:
+    - test-class-service
+  script:
+    - cd services/class-service
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
+    - docker build -t localhost:8000/root/class-service:latest .
+    - docker push localhost:8000/root/class-service:latest
+
+build-exam-service:
+  stage: build
+  rules:
+    - changes:
+        - services/exam-service/**/*
+  needs:
+    - test-exam-service
+  script:
+    - cd services/exam-service
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
+    - docker build -t localhost:8000/root/exam-service:latest .
+    - docker push localhost:8000/root/exam-service:latest
+
+build-question-service:
+  stage: build
+  rules:
+    - changes:
+        - services/question-service/**/*
+  needs:
+    - test-question-service
+  script:
+    - cd services/question-service
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
+    - docker build -t localhost:8000/root/question-service:latest .
+    - docker push localhost:8000/root/question-service:latest
+
+build-result-service:
+  stage: build
+  rules:
+    - changes:
+        - services/result-service/**/*
+  needs:
+    - test-result-service
+  script:
+    - cd services/result-service
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
+    - docker build -t localhost:8000/root/result-service:latest .
+    - docker push localhost:8000/root/result-service:latest
+
+build-notification-service:
+  stage: build
+  rules:
+    - changes:
+        - services/notification-service/**/*
+  needs:
+    - test-notification-service
+  script:
+    - cd services/notification-service
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
+    - docker build -t localhost:8000/root/notification-service:latest .
+    - docker push localhost:8000/root/notification-service:latest
+
+# ───────────────────────────────────────────────────────────────────────
+# STAGE 3: TRIỂN KHAI CẬP NHẬT LÊN MÁY CHỦ (DEPLOY)
+# ───────────────────────────────────────────────────────────────────────
+
+deploy-gateway:
+  stage: deploy
+  rules:
+    - changes:
+        - gateway/**/*
+  needs:
+    - build-gateway
+  script:
+    - cd /home/nguyentridung20044/mid-project-135890-main
+    - docker compose up -d --build gateway
+
+deploy-auth-service:
+  stage: deploy
+  rules:
+    - changes:
+        - services/auth-service/**/*
+  needs:
+    - build-auth-service
+  script:
+    - cd /home/nguyentridung20044/mid-project-135890-main
+    - docker compose up -d --build auth-service
+
+deploy-class-service:
+  stage: deploy
+  rules:
+    - changes:
+        - services/class-service/**/*
+  needs:
+    - build-class-service
+  script:
+    - cd /home/nguyentridung20044/mid-project-135890-main
+    - docker compose up -d --build class-service
+
+deploy-exam-service:
+  stage: deploy
+  rules:
+    - changes:
+        - services/exam-service/**/*
+  needs:
+    - build-exam-service
+  script:
+    - cd /home/nguyentridung20044/mid-project-135890-main
+    - docker compose up -d --build exam-service
+
+deploy-question-service:
+  stage: deploy
+  rules:
+    - changes:
+        - services/question-service/**/*
+  needs:
+    - build-question-service
+  script:
+    - cd /home/nguyentridung20044/mid-project-135890-main
+    - docker compose up -d --build question-service
+
+deploy-result-service:
+  stage: deploy
+  rules:
+    - changes:
+        - services/result-service/**/*
+  needs:
+    - build-result-service
+  script:
+    - cd /home/nguyentridung20044/mid-project-135890-main
+    - docker compose up -d --build result-service
+
+deploy-notification-service:
+  stage: deploy
+  rules:
+    - changes:
+        - services/notification-service/**/*
+  needs:
+    - build-notification-service
+  script:
+    - cd /home/nguyentridung20044/mid-project-135890-main
+    - docker compose up -d --build notification-service

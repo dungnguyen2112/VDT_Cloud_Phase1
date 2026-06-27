@@ -56,6 +56,7 @@ public class SecurityConfig {
                 "/api/auth/resend-verification",
                 "/api/auth/login",
                                 "/actuator/health",
+                                "/actuator/prometheus",
                                 "/api/exam/circuit-breakers"
                         ).permitAll()
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()

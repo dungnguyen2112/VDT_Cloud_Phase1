@@ -110,3 +110,11 @@ coverage/
 .pytest_cache/
 htmlcov/
 test-results/
+
+# ==============================
+# DevOps All-in-One VM Runtime Directories
+# ==============================
+gitlab/
+builds/
+tempo/
+grafana/

@@ -6,10 +6,21 @@ services:
   # ─── Eureka Service Registry (Service Discovery) ─
   eureka-server:
     build: ./eureka-server
+    container_name: eureka-server
     ports:
       - "${EUREKA_PORT}:8761"
     networks:
-      - app-network
+      - warehouse-network
+    volumes:
+      - ./agents/opentelemetry-javaagent.jar:/agents/opentelemetry-javaagent.jar
+    environment:
+      JAVA_TOOL_OPTIONS: -javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m
+      OTEL_SERVICE_NAME: eureka-server
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8761/"]
       interval: 15s
@@ -19,6 +30,8 @@ services:
   # ─── Auth DB ─────────────────────────────────────
   auth-db:
     image: mysql:8.4
+    container_name: auth-db
+    command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${AUTH_DB_PORT}:3306"
     environment:
@@ -32,11 +45,13 @@ services:
       timeout: 5s
       retries: 20
     networks:
-      - app-network
+      - warehouse-network
 
   # ─── Exam DB ─────────────────────────────────────
   exam-db:
     image: mysql:8.4
+    container_name: exam-db
+    command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${EXAM_DB_PORT}:3306"
     environment:
@@ -50,11 +65,13 @@ services:
       timeout: 5s
       retries: 20
     networks:
-      - app-network
+      - warehouse-network
 
   # ─── Question DB (isolated from exam/auth DB) ─
   question-db:
     image: mysql:8.4
+    container_name: question-db
+    command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${QUESTION_DB_PORT}:3306"
     environment:
@@ -68,11 +85,13 @@ services:
       timeout: 5s
       retries: 20
     networks:
-      - app-network
+      - warehouse-network
 
   # ─── Result DB ─────────────────────────────────────
   result-db:
     image: mysql:8.4
+    container_name: result-db
+    command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${RESULT_DB_PORT:-3309}:3306"
     environment:
@@ -86,12 +105,13 @@ services:
       timeout: 5s
       retries: 20
     networks:
-      - app-network
-
+      - warehouse-network
 
   # ─── Class DB ────────────────────────────────────
   class-db:
     image: mysql:8.4
+    container_name: class-db
+    command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${CLASS_DB_PORT:-3311}:3306"
     environment:
@@ -105,11 +125,13 @@ services:
       timeout: 5s
       retries: 20
     networks:
-      - app-network
+      - warehouse-network
 
   # ─── Notification DB ─────────────────────────────
   notification-db:
     image: mysql:8.4
+    container_name: notification-db
+    command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${NOTIFICATION_DB_PORT:-3312}:3306"
     environment:
@@ -123,11 +145,12 @@ services:
       timeout: 5s
       retries: 20
     networks:
-      - app-network
+      - warehouse-network
 
   # ─── Redis ────────────────────────────────
   redis:
     image: redis:7-alpine
+    container_name: redis
     ports:
       - "${REDIS_PORT:-6379}:6379"
     command: ["redis-server", "--appendonly", "yes"]
@@ -137,13 +160,31 @@ services:
       timeout: 5s
       retries: 10
     networks:
-      - app-network
+      - warehouse-network
+
+  # ─── RabbitMQ ─────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - warehouse-network
 
   # ─── Auth Service ────────────────────────────────
   auth-service:
     build: ./services/auth-service
+    container_name: auth-service
     ports:
       - "${AUTH_SERVICE_PORT}:8081"
+    volumes:
+      - ./agents/opentelemetry-javaagent.jar:/agents/opentelemetry-javaagent.jar
     environment:
       SERVER_PORT: 8081
       DB_URL: jdbc:mysql://auth-db:3306/${AUTH_DB_NAME}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
@@ -155,26 +196,39 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JAVA_TOOL_OPTIONS: -javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m
+      OTEL_SERVICE_NAME: auth-service
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
     depends_on:
       eureka-server:
         condition: service_healthy
-      auth-db:
+      redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      auth-db:
+        condition: service_healthy
     networks:
-      - app-network
+      - warehouse-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8081/actuator/health"]
       interval: 15s
       timeout: 5s
-      retries: 10
+      retries: 25
+      start_period: 90s
 
   # ─── Exam Service ────────────────────────────────
   exam-service:
     build: ./services/exam-service
+    container_name: exam-service
     expose:
       - "8082"
+    volumes:
+      - ./agents/opentelemetry-javaagent.jar:/agents/opentelemetry-javaagent.jar
     environment:
       SERVER_PORT: 8082
       SPRING_CACHE_TYPE: none
@@ -190,28 +244,39 @@ services:
       RABBITMQ_USERNAME: guest
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JAVA_TOOL_OPTIONS: -javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m
+      OTEL_SERVICE_NAME: exam-service
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
     depends_on:
       eureka-server:
-        condition: service_healthy
-      exam-db:
         condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      exam-db:
+        condition: service_healthy
     networks:
-      - app-network
+      - warehouse-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8082/actuator/health"]
       interval: 15s
       timeout: 5s
-      retries: 10
+      retries: 25
+      start_period: 90s
 
   # ─── Question Service ────────────────────────────
   question-service:
     build: ./services/question-service
+    container_name: question-service
     expose:
       - "8083"
+    volumes:
+      - ./agents/opentelemetry-javaagent.jar:/agents/opentelemetry-javaagent.jar
     environment:
       SERVER_PORT: 8083
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
@@ -229,26 +294,39 @@ services:
       GEMINI_TIMEOUT_SECONDS: ${GEMINI_TIMEOUT_SECONDS:-60}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-60}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JAVA_TOOL_OPTIONS: -javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m
+      OTEL_SERVICE_NAME: question-service
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
     depends_on:
       eureka-server:
         condition: service_healthy
-      question-db:
-        condition: service_healthy
       redis:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      question-db:
+        condition: service_healthy
     networks:
-      - app-network
+      - warehouse-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8083/actuator/health"]
       interval: 15s
       timeout: 5s
-      retries: 10
+      retries: 25
+      start_period: 90s
 
   # ─── Result Service ────────────────────────────────
   result-service:
     build: ./services/result-service
+    container_name: result-service
     expose:
       - "8084"
+    volumes:
+      - ./agents/opentelemetry-javaagent.jar:/agents/opentelemetry-javaagent.jar
     environment:
       SERVER_PORT: 8084
       DB_URL: jdbc:mysql://result-db:3306/${RESULT_DB_NAME}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
@@ -263,28 +341,39 @@ services:
       RABBITMQ_USERNAME: guest
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JAVA_TOOL_OPTIONS: -javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m
+      OTEL_SERVICE_NAME: result-service
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
     depends_on:
       eureka-server:
         condition: service_healthy
-      result-db:
-        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      result-db:
+        condition: service_healthy
     networks:
-      - app-network
+      - warehouse-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8084/actuator/health"]
       interval: 15s
       timeout: 5s
-      retries: 10
+      retries: 25
+      start_period: 90s
 
   # ─── Notification Service ──────────────────────────
   notification-service:
     build: ./services/notification-service
+    container_name: notification-service
     expose:
       - "8086"
+    volumes:
+      - ./agents/opentelemetry-javaagent.jar:/agents/opentelemetry-javaagent.jar
     environment:
       SERVER_PORT: 8086
       JWT_SECRET: ${JWT_SECRET}
@@ -302,27 +391,39 @@ services:
       RABBITMQ_USERNAME: guest
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JAVA_TOOL_OPTIONS: -javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m
+      OTEL_SERVICE_NAME: notification-service
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
     depends_on:
       eureka-server:
         condition: service_healthy
-      notification-db:
+      redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      notification-db:
+        condition: service_healthy
     networks:
-      - app-network
+      - warehouse-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8086/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8086/actuator/health"]
       interval: 15s
       timeout: 5s
-      retries: 10
-
+      retries: 25
+      start_period: 90s
 
   # ─── Class Service ───────────────────────────────
   class-service:
     build: ./services/class-service
+    container_name: class-service
     expose:
       - "8087"
+    volumes:
+      - ./agents/opentelemetry-javaagent.jar:/agents/opentelemetry-javaagent.jar
     environment:
       SERVER_PORT: 8087
       DB_URL: jdbc:mysql://class-db:3306/${CLASS_DB_NAME:-class_service_db}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
@@ -334,32 +435,56 @@ services:
       RABBITMQ_USERNAME: guest
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JAVA_TOOL_OPTIONS: -javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m
+      OTEL_SERVICE_NAME: class-service
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
     depends_on:
       eureka-server:
         condition: service_healthy
-      class-db:
+      redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      class-db:
+        condition: service_healthy
     networks:
-      - app-network
+      - warehouse-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8087/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8087/actuator/health"]
       interval: 15s
       timeout: 5s
-      retries: 10
+      retries: 25
+      start_period: 90s
 
   # ─── API Gateway ─────────────────────────────────
   gateway:
     build: ./gateway
+    container_name: gateway
     ports:
       - "${GATEWAY_PORT}:8080"
+    volumes:
+      - ./agents/opentelemetry-javaagent.jar:/agents/opentelemetry-javaagent.jar
     environment:
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       JWT_SECRET: ${JWT_SECRET}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:*,http://127.0.0.1:*}
+      JAVA_TOOL_OPTIONS: -javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m
+      OTEL_SERVICE_NAME: gateway
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
     depends_on:
       eureka-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       auth-service:
         condition: service_healthy
@@ -374,61 +499,43 @@ services:
       notification-service:
         condition: service_healthy
     networks:
-      - app-network
+      - warehouse-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/actuator/health"]
       interval: 15s
       timeout: 5s
-      retries: 10
+      retries: 25
+      start_period: 90s
 
   # ─── Frontend ─
   frontend:
     build: ./frontend
+    container_name: frontend
     ports:
       - "${FRONTEND_PORT}:3000"
     depends_on:
       gateway:
         condition: service_healthy
     networks:
-      - app-network
+      - warehouse-network
 
-  # ─── Shared Infrastructure (uncomment as needed) ─
-  # db:
-  #   image: postgres:16-alpine    # or mysql:8, mongo:7, etc.
-  #   ports:
-  #     - "${DB_PORT:-5432}:5432"
-  #   environment:
-  #     POSTGRES_DB: ${DB_NAME:-mydb}
-  #     POSTGRES_USER: ${DB_USER:-admin}
-  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
-  #   volumes:
-  #     - db-data:/var/lib/postgresql/data
-  #   networks:
-  #     - app-network
-
-  # redis-server:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
-  #   networks:
-  #     - app-network
-
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
+  # ─── Fluent Bit (Log Forwarder to Loki) ───────────
+  fluent-bit:
+    image: fluent/fluent-bit:3.0
+    container_name: fluent-bit
+    user: root
+    volumes:
+      - ./fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
+      - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
     networks:
-      - app-network
+      - warehouse-network
 
 networks:
-  app-network:
-    driver: bridge
-
-# volumes:
-#   db-data:
+  warehouse-network:
+    external: true
+    name: warehouse-network

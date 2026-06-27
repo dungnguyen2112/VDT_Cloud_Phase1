@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  # ─── GitLab CE (Self-Hosted Git Server) ───────────
+  gitlab:
+    image: 'gitlab/gitlab-ce:17.0.0-ce.0'
+    container_name: gitlab
+    restart: always
+    hostname: '34.21.169.162'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://34.21.169.162'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2222
+    ports:
+      - '80:80'
+      - '443:443'
+      - '2222:22'
+    volumes:
+      - ./gitlab/config:/etc/gitlab
+      - ./gitlab/logs:/var/log/gitlab
+      - ./gitlab/data:/var/opt/gitlab
+    networks:
+      - warehouse-network
+
+  # ─── Harbor (Lightweight Private Docker Registry) ──────────
+  harbor:
+    image: registry:2
+    container_name: harbor
+    restart: always
+    ports:
+      - "8000:5000"
+    environment:
+      REGISTRY_AUTH: htpasswd
+      REGISTRY_AUTH_HTPASSWD_REALM: Registry Realm
+      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
+    volumes:
+      - ./harbor/auth:/auth
+      - ./harbor/data:/var/lib/registry
+    networks:
+      - warehouse-network
+
+  # ─── Prometheus (Metrics Aggregation) ────────────
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - warehouse-network
+
+  # ─── Loki (Log Aggregation Server) ────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki
+    restart: always
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - warehouse-network
+
+  # ─── Tempo (Distributed Tracing Server) ───────────
+  tempo:
+    image: grafana/tempo:2.4.0
+    container_name: tempo
+    restart: always
+    command: -config.file=/etc/tempo/tempo-local.yaml
+    ports:
+      - "3200:3200"   # Tempo HTTP
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo-local.yaml
+    networks:
+      - warehouse-network
+
+  # ─── Grafana (Visualization Dashboard) ────────────
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: grafana
+    restart: always
+    ports:
+      - "3001:3000"   # Expose Grafana on 3001 (Frontend is on 3000)
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - loki
+      - tempo
+      - prometheus
+    networks:
+      - warehouse-network
+
+  # ─── Registry UI (Web Interface for Harbor/Registry) ──────
+  registry-ui:
+    image: joxit/docker-registry-ui:latest
+    container_name: registry-ui
+    restart: always
+    ports:
+      - "8020:80"
+    environment:
+      - NGINX_PROXY_PASS_URL=http://harbor:5000
+      - SINGLE_REGISTRY=true
+      - DELETE_IMAGES=true
+      - REGISTRY_TITLE=Private Registry
+    depends_on:
+      - harbor
+    networks:
+      - warehouse-network
+
+networks:
+  warehouse-network:
+    name: warehouse-network
+    driver: bridge
