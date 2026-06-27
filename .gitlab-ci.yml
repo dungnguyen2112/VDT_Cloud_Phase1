@@ -23,6 +23,7 @@ test-gateway:
   rules:
     - changes:
         - gateway/**/*
+        - .gitlab-ci.yml
   script:
     - cd gateway
     - mvn clean test
@@ -33,6 +34,7 @@ test-auth-service:
   rules:
     - changes:
         - services/auth-service/**/*
+        - .gitlab-ci.yml
   script:
     - cd services/auth-service
     - mvn clean test
@@ -43,6 +45,7 @@ test-class-service:
   rules:
     - changes:
         - services/class-service/**/*
+        - .gitlab-ci.yml
   script:
     - cd services/class-service
     - mvn clean test
@@ -53,6 +56,7 @@ test-exam-service:
   rules:
     - changes:
         - services/exam-service/**/*
+        - .gitlab-ci.yml
   script:
     - echo "=================================================="
     - echo "🚀 Starting Quality Gate for exam-service..."
@@ -92,6 +96,7 @@ test-question-service:
   rules:
     - changes:
         - services/question-service/**/*
+        - .gitlab-ci.yml
   script:
     - cd services/question-service
     - mvn clean test
@@ -102,6 +107,7 @@ test-result-service:
   rules:
     - changes:
         - services/result-service/**/*
+        - .gitlab-ci.yml
   script:
     - cd services/result-service
     - mvn clean test
@@ -112,6 +118,7 @@ test-notification-service:
   rules:
     - changes:
         - services/notification-service/**/*
+        - .gitlab-ci.yml
   script:
     - cd services/notification-service
     - mvn clean test
@@ -125,6 +132,7 @@ build-gateway:
   rules:
     - changes:
         - gateway/**/*
+        - .gitlab-ci.yml
   needs:
     - test-gateway
   script:
@@ -138,6 +146,7 @@ build-auth-service:
   rules:
     - changes:
         - services/auth-service/**/*
+        - .gitlab-ci.yml
   needs:
     - test-auth-service
   script:
@@ -151,6 +160,7 @@ build-class-service:
   rules:
     - changes:
         - services/class-service/**/*
+        - .gitlab-ci.yml
   needs:
     - test-class-service
   script:
@@ -164,6 +174,7 @@ build-exam-service:
   rules:
     - changes:
         - services/exam-service/**/*
+        - .gitlab-ci.yml
   needs:
     - test-exam-service
   script:
@@ -177,6 +188,7 @@ build-question-service:
   rules:
     - changes:
         - services/question-service/**/*
+        - .gitlab-ci.yml
   needs:
     - test-question-service
   script:
@@ -190,6 +202,7 @@ build-result-service:
   rules:
     - changes:
         - services/result-service/**/*
+        - .gitlab-ci.yml
   needs:
     - test-result-service
   script:
@@ -203,6 +216,7 @@ build-notification-service:
   rules:
     - changes:
         - services/notification-service/**/*
+        - .gitlab-ci.yml
   needs:
     - test-notification-service
   script:
@@ -220,6 +234,7 @@ deploy-gateway:
   rules:
     - changes:
         - gateway/**/*
+        - .gitlab-ci.yml
   needs:
     - build-gateway
   script:
@@ -231,6 +246,7 @@ deploy-auth-service:
   rules:
     - changes:
         - services/auth-service/**/*
+        - .gitlab-ci.yml
   needs:
     - build-auth-service
   script:
@@ -242,6 +258,7 @@ deploy-class-service:
   rules:
     - changes:
         - services/class-service/**/*
+        - .gitlab-ci.yml
   needs:
     - build-class-service
   script:
@@ -253,6 +270,7 @@ deploy-exam-service:
   rules:
     - changes:
         - services/exam-service/**/*
+        - .gitlab-ci.yml
   needs:
     - build-exam-service
   script:
@@ -264,6 +282,7 @@ deploy-question-service:
   rules:
     - changes:
         - services/question-service/**/*
+        - .gitlab-ci.yml
   needs:
     - build-question-service
   script:
@@ -275,6 +294,7 @@ deploy-result-service:
   rules:
     - changes:
         - services/result-service/**/*
+        - .gitlab-ci.yml
   needs:
     - build-result-service
   script:
@@ -286,6 +306,7 @@ deploy-notification-service:
   rules:
     - changes:
         - services/notification-service/**/*
+        - .gitlab-ci.yml
   needs:
     - build-notification-service
   script:
