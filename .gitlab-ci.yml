@@ -25,8 +25,7 @@ test-gateway:
         - gateway/**/*
   script:
     - cd gateway
-    - chmod +x mvnw
-    - ./mvnw clean test
+    - mvn clean test
 
 test-auth-service:
   stage: test
@@ -36,8 +35,7 @@ test-auth-service:
         - services/auth-service/**/*
   script:
     - cd services/auth-service
-    - chmod +x mvnw
-    - ./mvnw clean test
+    - mvn clean test
 
 test-class-service:
   stage: test
@@ -47,8 +45,7 @@ test-class-service:
         - services/class-service/**/*
   script:
     - cd services/class-service
-    - chmod +x mvnw
-    - ./mvnw clean test
+    - mvn clean test
 
 test-exam-service:
   stage: test
@@ -64,8 +61,7 @@ test-exam-service:
     
     # Run tests and intercept exit code
     - set +e
-    - chmod +x mvnw
-    - ./mvnw clean test
+    - mvn clean test
     - TEST_EXIT_CODE=$?
     - set -e
     
@@ -98,8 +94,7 @@ test-question-service:
         - services/question-service/**/*
   script:
     - cd services/question-service
-    - chmod +x mvnw
-    - ./mvnw clean test
+    - mvn clean test
 
 test-result-service:
   stage: test
@@ -109,8 +104,7 @@ test-result-service:
         - services/result-service/**/*
   script:
     - cd services/result-service
-    - chmod +x mvnw
-    - ./mvnw clean test
+    - mvn clean test
 
 test-notification-service:
   stage: test
@@ -120,8 +114,7 @@ test-notification-service:
         - services/notification-service/**/*
   script:
     - cd services/notification-service
-    - chmod +x mvnw
-    - ./mvnw clean test
+    - mvn clean test
 
 # ───────────────────────────────────────────────────────────────────────
 # STAGE 2: ĐÓNG GÓI & ĐẨY ẢNH LÊN KHO CHỨA (BUILD & PUSH)
