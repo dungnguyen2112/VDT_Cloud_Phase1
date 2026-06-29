@@ -276,7 +276,10 @@ export default function TakeExamPage() {
         }),
       );
 
-      const idempotencyKey = `${examId}-${crypto.randomUUID()}`;
+      const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+        ? crypto.randomUUID() 
+        : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const idempotencyKey = `${examId}-${uuid}`;
       const result = await submitExam({ examId, answers: normalizedAnswers, idempotencyKey });
       setSubmitResult(result);
       setViolationCount(result.violationCount ?? violationCount);

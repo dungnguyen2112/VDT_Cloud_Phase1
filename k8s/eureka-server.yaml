@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eureka-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eureka-server
+  template:
+    metadata:
+      labels:
+        app: eureka-server
+    spec:
+      containers:
+        - name: eureka-server
+          image: 35.185.187.150:8000/root/eureka-server:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8761
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m"
+            - name: OTEL_SERVICE_NAME
+              value: "eureka-server"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://tempo:4318"
+          volumeMounts:
+            - name: agents-volume
+              mountPath: /agents
+      volumes:
+        - name: agents-volume
+          hostPath:
+            path: /home/nguyentridung20044/mid-project-135890-main/agents
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eureka-server
+spec:
+  ports:
+    - port: 8761
+      targetPort: 8761
+  selector:
+    app: eureka-server

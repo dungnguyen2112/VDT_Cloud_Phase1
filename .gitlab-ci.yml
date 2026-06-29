@@ -5,54 +5,56 @@ stages:
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
-  # Ở môi trường thực tế, 2 biến này sẽ được cấu hình ẩn trong giao diện Settings -> CI/CD -> Variables của GitLab.
+  # Cấu hình Harbor Registry IP ngoài mới và tài khoản đăng nhập
+  HARBOR_REGISTRY: "35.185.187.150:8000"
   HARBOR_USER: "admin"
   HARBOR_PASSWORD: "admin"
+  # Cung cấp JWT_SECRET mặc định cho quá trình chạy test
+  JWT_SECRET: "vdt_cloud_phase1_jwt_secret_key_long_enough_32_bytes"
 
 cache:
   paths:
     - .m2/repository/
 
 # ───────────────────────────────────────────────────────────────────────
-# STAGE 1: KIỂM THỬ CHẤT LƯỢNG (TEST) - CHO CẢ 7 DỊCH VỤ
+# STAGE 1: KIỂM THỬ CHẤT LƯỢNG (TEST) - CHẠY NATIVE TRÊN MÁY CHỦ
 # ───────────────────────────────────────────────────────────────────────
 
 test-gateway:
   stage: test
-  image: maven:3.8.5-openjdk-17
   rules:
     - changes:
         - gateway/**/*
         - .gitlab-ci.yml
   script:
     - cd gateway
+    - export JWT_SECRET="$JWT_SECRET"
     - mvn clean test
 
 test-auth-service:
   stage: test
-  image: maven:3.8.5-openjdk-17
   rules:
     - changes:
         - services/auth-service/**/*
         - .gitlab-ci.yml
   script:
     - cd services/auth-service
+    - export JWT_SECRET="$JWT_SECRET"
     - mvn clean test
 
 test-class-service:
   stage: test
-  image: maven:3.8.5-openjdk-17
   rules:
     - changes:
         - services/class-service/**/*
         - .gitlab-ci.yml
   script:
     - cd services/class-service
+    - export JWT_SECRET="$JWT_SECRET"
     - mvn clean test
 
 test-exam-service:
   stage: test
-  image: maven:3.8.5-openjdk-17
   rules:
     - changes:
         - services/exam-service/**/*
@@ -63,8 +65,9 @@ test-exam-service:
     - echo "=================================================="
     - cd services/exam-service
     
-    # Run tests and intercept exit code
+    # Chạy test native trực tiếp trên máy chủ
     - set +e
+    - export JWT_SECRET="$JWT_SECRET"
     - mvn clean test
     - TEST_EXIT_CODE=$?
     - set -e
@@ -92,39 +95,39 @@ test-exam-service:
 
 test-question-service:
   stage: test
-  image: maven:3.8.5-openjdk-17
   rules:
     - changes:
         - services/question-service/**/*
         - .gitlab-ci.yml
   script:
     - cd services/question-service
+    - export JWT_SECRET="$JWT_SECRET"
     - mvn clean test
 
 test-result-service:
   stage: test
-  image: maven:3.8.5-openjdk-17
   rules:
     - changes:
         - services/result-service/**/*
         - .gitlab-ci.yml
   script:
     - cd services/result-service
+    - export JWT_SECRET="$JWT_SECRET"
     - mvn clean test
 
 test-notification-service:
   stage: test
-  image: maven:3.8.5-openjdk-17
   rules:
     - changes:
         - services/notification-service/**/*
         - .gitlab-ci.yml
   script:
     - cd services/notification-service
+    - export JWT_SECRET="$JWT_SECRET"
     - mvn clean test
 
 # ───────────────────────────────────────────────────────────────────────
-# STAGE 2: ĐÓNG GÓI & ĐẨY ẢNH LÊN KHO CHỨA (BUILD & PUSH)
+# STAGE 2: ĐÓNG GÓI & ĐẨY ẢNH LÊN HARBOR XỊN
 # ───────────────────────────────────────────────────────────────────────
 
 build-gateway:
@@ -137,9 +140,9 @@ build-gateway:
     - test-gateway
   script:
     - cd gateway
-    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
-    - docker build -t localhost:8000/root/gateway:latest .
-    - docker push localhost:8000/root/gateway:latest
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
+    - docker build -t "$HARBOR_REGISTRY/root/gateway:latest" .
+    - docker push "$HARBOR_REGISTRY/root/gateway:latest"
 
 build-auth-service:
   stage: build
@@ -151,9 +154,9 @@ build-auth-service:
     - test-auth-service
   script:
     - cd services/auth-service
-    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
-    - docker build -t localhost:8000/root/auth-service:latest .
-    - docker push localhost:8000/root/auth-service:latest
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
+    - docker build -t "$HARBOR_REGISTRY/root/auth-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/auth-service:latest"
 
 build-class-service:
   stage: build
@@ -165,9 +168,9 @@ build-class-service:
     - test-class-service
   script:
     - cd services/class-service
-    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
-    - docker build -t localhost:8000/root/class-service:latest .
-    - docker push localhost:8000/root/class-service:latest
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
+    - docker build -t "$HARBOR_REGISTRY/root/class-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/class-service:latest"
 
 build-exam-service:
   stage: build
@@ -179,9 +182,9 @@ build-exam-service:
     - test-exam-service
   script:
     - cd services/exam-service
-    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
-    - docker build -t localhost:8000/root/exam-service:latest .
-    - docker push localhost:8000/root/exam-service:latest
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
+    - docker build -t "$HARBOR_REGISTRY/root/exam-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/exam-service:latest"
 
 build-question-service:
   stage: build
@@ -193,9 +196,9 @@ build-question-service:
     - test-question-service
   script:
     - cd services/question-service
-    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
-    - docker build -t localhost:8000/root/question-service:latest .
-    - docker push localhost:8000/root/question-service:latest
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
+    - docker build -t "$HARBOR_REGISTRY/root/question-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/question-service:latest"
 
 build-result-service:
   stage: build
@@ -207,9 +210,9 @@ build-result-service:
     - test-result-service
   script:
     - cd services/result-service
-    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
-    - docker build -t localhost:8000/root/result-service:latest .
-    - docker push localhost:8000/root/result-service:latest
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
+    - docker build -t "$HARBOR_REGISTRY/root/result-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/result-service:latest"
 
 build-notification-service:
   stage: build
@@ -221,12 +224,12 @@ build-notification-service:
     - test-notification-service
   script:
     - cd services/notification-service
-    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" localhost:8000
-    - docker build -t localhost:8000/root/notification-service:latest .
-    - docker push localhost:8000/root/notification-service:latest
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
+    - docker build -t "$HARBOR_REGISTRY/root/notification-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/notification-service:latest"
 
 # ───────────────────────────────────────────────────────────────────────
-# STAGE 3: TRIỂN KHAI CẬP NHẬT LÊN MÁY CHỦ (DEPLOY)
+# STAGE 3: TRIỂN KHAI LÊN KUBERNETES CLUSTER (K3s)
 # ───────────────────────────────────────────────────────────────────────
 
 deploy-gateway:
@@ -238,8 +241,11 @@ deploy-gateway:
   needs:
     - build-gateway
   script:
+    - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
-    - docker compose up -d --build gateway
+    - kubectl apply -f k8s/external-services.yaml
+    - kubectl apply -f k8s/gateway.yaml
+    - kubectl rollout restart deployment/gateway
 
 deploy-auth-service:
   stage: deploy
@@ -250,8 +256,12 @@ deploy-auth-service:
   needs:
     - build-auth-service
   script:
+    - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
-    - docker compose up -d --build auth-service
+    - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl apply -f k8s/external-services.yaml
+    - kubectl apply -f k8s/services.yaml
+    - kubectl rollout restart deployment/auth-service
 
 deploy-class-service:
   stage: deploy
@@ -262,8 +272,12 @@ deploy-class-service:
   needs:
     - build-class-service
   script:
+    - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
-    - docker compose up -d --build class-service
+    - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl apply -f k8s/external-services.yaml
+    - kubectl apply -f k8s/services.yaml
+    - kubectl rollout restart deployment/class-service
 
 deploy-exam-service:
   stage: deploy
@@ -274,8 +288,12 @@ deploy-exam-service:
   needs:
     - build-exam-service
   script:
+    - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
-    - docker compose up -d --build exam-service
+    - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl apply -f k8s/external-services.yaml
+    - kubectl apply -f k8s/services.yaml
+    - kubectl rollout restart deployment/exam-service
 
 deploy-question-service:
   stage: deploy
@@ -286,8 +304,12 @@ deploy-question-service:
   needs:
     - build-question-service
   script:
+    - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
-    - docker compose up -d --build question-service
+    - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl apply -f k8s/external-services.yaml
+    - kubectl apply -f k8s/services.yaml
+    - kubectl rollout restart deployment/question-service
 
 deploy-result-service:
   stage: deploy
@@ -298,8 +320,12 @@ deploy-result-service:
   needs:
     - build-result-service
   script:
+    - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
-    - docker compose up -d --build result-service
+    - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl apply -f k8s/external-services.yaml
+    - kubectl apply -f k8s/services.yaml
+    - kubectl rollout restart deployment/result-service
 
 deploy-notification-service:
   stage: deploy
@@ -310,5 +336,9 @@ deploy-notification-service:
   needs:
     - build-notification-service
   script:
+    - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
-    - docker compose up -d --build notification-service
+    - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl apply -f k8s/external-services.yaml
+    - kubectl apply -f k8s/services.yaml
+    - kubectl rollout restart deployment/notification-service

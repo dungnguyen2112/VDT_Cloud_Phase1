@@ -1,0 +1,189 @@
+# ───────────────────────────────────────────────────────────────────────
+# 1. LIÊN KẾT CƠ SỞ DỮ LIỆU AUTH (AUTH DATABASE ROUTING)
+# ───────────────────────────────────────────────────────────────────────
+
+# Định nghĩa một K8s Service không có selector (để tạo một Hostname ảo nội bộ)
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-db
+spec:
+  ports:
+    - port: 3306      # Cổng giao tiếp ảo trong cụm K8s
+---
+# Định nghĩa Endpoint để trỏ Hostname ảo trên về IP của máy chủ vật lý bên ngoài
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: auth-db       # Tên phải trùng khớp 100% với tên Service ở trên
+subsets:
+  - addresses:
+      - ip: HOST_IP   # Sẽ được tự động thay thế bằng IP nội bộ máy ảo GCP
+    ports:
+      - port: 3306    # Cổng MySQL của auth-db đang chạy trên Docker Host
+---
+# ───────────────────────────────────────────────────────────────────────
+# 2. LIÊN KẾT CƠ SỞ DỮ LIỆU HỎI ĐÁP (QUESTION DATABASE)
+# ───────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: question-db
+spec:
+  ports:
+    - port: 3306
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: question-db
+subsets:
+  - addresses:
+      - ip: HOST_IP
+    ports:
+      - port: 3307
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: exam-db
+spec:
+  ports:
+    - port: 3306
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: exam-db
+subsets:
+  - addresses:
+      - ip: HOST_IP
+    ports:
+      - port: 3308
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: result-db
+spec:
+  ports:
+    - port: 3306
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: result-db
+subsets:
+  - addresses:
+      - ip: HOST_IP
+    ports:
+      - port: 3309
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: class-db
+spec:
+  ports:
+    - port: 3306
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: class-db
+subsets:
+  - addresses:
+      - ip: HOST_IP
+    ports:
+      - port: 3311
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-db
+spec:
+  ports:
+    - port: 3306
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: notification-db
+subsets:
+  - addresses:
+      - ip: HOST_IP
+    ports:
+      - port: 3312
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  ports:
+    - port: 6379
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: redis
+subsets:
+  - addresses:
+      - ip: HOST_IP
+    ports:
+      - port: 6379
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+spec:
+  ports:
+    - name: amqp
+      port: 5672
+    - name: management
+      port: 15672
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: rabbitmq
+subsets:
+  - addresses:
+      - ip: HOST_IP
+    ports:
+      - name: amqp
+        port: 5672
+      - name: management
+        port: 15672
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+spec:
+  ports:
+    - name: otlp-grpc
+      port: 4317
+    - name: otlp-http
+      port: 4318
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: tempo
+subsets:
+  - addresses:
+      - ip: HOST_IP
+    ports:
+      - name: otlp-grpc
+        port: 4317
+      - name: otlp-http
+        port: 4318

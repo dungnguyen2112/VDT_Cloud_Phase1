@@ -31,6 +31,7 @@ services:
   auth-db:
     image: mysql:8.4
     container_name: auth-db
+    restart: always
     command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${AUTH_DB_PORT}:3306"
@@ -51,6 +52,7 @@ services:
   exam-db:
     image: mysql:8.4
     container_name: exam-db
+    restart: always
     command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${EXAM_DB_PORT}:3306"
@@ -71,6 +73,7 @@ services:
   question-db:
     image: mysql:8.4
     container_name: question-db
+    restart: always
     command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${QUESTION_DB_PORT}:3306"
@@ -91,6 +94,7 @@ services:
   result-db:
     image: mysql:8.4
     container_name: result-db
+    restart: always
     command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${RESULT_DB_PORT:-3309}:3306"
@@ -111,6 +115,7 @@ services:
   class-db:
     image: mysql:8.4
     container_name: class-db
+    restart: always
     command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${CLASS_DB_PORT:-3311}:3306"
@@ -131,6 +136,7 @@ services:
   notification-db:
     image: mysql:8.4
     container_name: notification-db
+    restart: always
     command: --performance_schema=OFF --innodb_buffer_pool_size=16M
     ports:
       - "${NOTIFICATION_DB_PORT:-3312}:3306"
@@ -150,7 +156,8 @@ services:
   # ─── Redis ────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: redis
+    container_name: app-redis
+    restart: always
     ports:
       - "${REDIS_PORT:-6379}:6379"
     command: ["redis-server", "--appendonly", "yes"]
@@ -166,6 +173,7 @@ services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: rabbitmq
+    restart: always
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -511,11 +519,9 @@ services:
   frontend:
     build: ./frontend
     container_name: frontend
+    restart: always
     ports:
       - "${FRONTEND_PORT}:3000"
-    depends_on:
-      gateway:
-        condition: service_healthy
     networks:
       - warehouse-network
 
@@ -523,15 +529,15 @@ services:
   fluent-bit:
     image: fluent/fluent-bit:3.0
     container_name: fluent-bit
+    restart: always
     user: root
     volumes:
       - ./fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
       - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on:
-      gateway:
-        condition: service_healthy
+      - /var/log/containers:/var/log/containers:ro
+      - /var/log/pods:/var/log/pods:ro
     networks:
       - warehouse-network
 

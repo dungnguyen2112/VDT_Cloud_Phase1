@@ -1,39 +1,52 @@
+# ───────────────────────────────────────────────────────────────────────
+# CẤU HÌNH TOÀN CỤC CỦA PROMETHEUS (GLOBAL CONFIG)
+# ───────────────────────────────────────────────────────────────────────
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  scrape_interval: 15s      # Chu kỳ cào (scrape) chỉ số: Cứ 15 giây cào metrics 1 lần
+  evaluation_interval: 15s  # Chu kỳ đánh giá lại các quy tắc cảnh báo (Alert Rules): 15 giây/lần
 
+# ───────────────────────────────────────────────────────────────────────
+# ĐỊNH NGHĨA CÁC ĐỊA CHỈ CÀO CHỈ SỐ (SCRAPE CONFIGS)
+# ───────────────────────────────────────────────────────────────────────
 scrape_configs:
+  # 1. API GATEWAY: Expose metrics qua IP Bridge của Docker (cổng 8080)
   - job_name: 'gateway'
-    metrics_path: '/actuator/prometheus'
+    metrics_path: '/actuator/prometheus' # Endpoint xuất chỉ số của Spring Actuator
     static_configs:
-      - targets: ['gateway:8080']
+      - targets: ['172.17.0.1:8080']
 
+  # 2. AUTH SERVICE: Cổng 8081
   - job_name: 'auth-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['auth-service:8081']
+      - targets: ['172.17.0.1:8081']
 
+  # 3. EXAM SERVICE: Cổng 8082
   - job_name: 'exam-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['exam-service:8082']
+      - targets: ['172.17.0.1:8082']
 
+  # 4. QUESTION SERVICE: Cổng 8083
   - job_name: 'question-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['question-service:8083']
+      - targets: ['172.17.0.1:8083']
 
+  # 5. RESULT SERVICE: Cổng 8084
   - job_name: 'result-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['result-service:8084']
+      - targets: ['172.17.0.1:8084']
 
+  # 6. NOTIFICATION SERVICE: Cổng 8086
   - job_name: 'notification-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['notification-service:8086']
+      - targets: ['172.17.0.1:8086']
 
+  # 7. CLASS SERVICE: Cổng 8087
   - job_name: 'class-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['class-service:8087']
+      - targets: ['172.17.0.1:8087']

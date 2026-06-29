@@ -1,0 +1,504 @@
+# ───────────────────────────────────────────────────────────────────────
+# 1. AUTH SERVICE
+# ───────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: 35.185.187.150:8000/root/auth-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8081
+          env:
+            - name: SERVER_PORT
+              value: "8081"
+            - name: DB_URL
+              value: "jdbc:mysql://auth-db:3306/auth_service_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+            - name: DB_USERNAME
+              value: "root"
+            - name: DB_PASSWORD
+              value: "root"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: "guest"
+            - name: RABBITMQ_PASSWORD
+              value: "guest"
+            - name: JWT_SECRET
+              value: "vdt_cloud_phase1_jwt_secret_key_long_enough_32_bytes"
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://eureka-server:8761/eureka/"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m"
+            - name: OTEL_SERVICE_NAME
+              value: "auth-service"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://tempo:4318"
+          volumeMounts:
+            - name: agents-volume
+              mountPath: /agents
+      volumes:
+        - name: agents-volume
+          hostPath:
+            path: /home/nguyentridung20044/mid-project-135890-main/agents
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8081
+      targetPort: 8081
+  selector:
+    app: auth-service
+
+---
+# ───────────────────────────────────────────────────────────────────────
+# 2. EXAM SERVICE
+# ───────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exam-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: exam-service
+  template:
+    metadata:
+      labels:
+        app: exam-service
+    spec:
+      containers:
+        - name: exam-service
+          image: 35.185.187.150:8000/root/exam-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8082
+          env:
+            - name: SERVER_PORT
+              value: "8082"
+            - name: SPRING_CACHE_TYPE
+              value: "none"
+            - name: DB_URL
+              value: "jdbc:mysql://exam-db:3306/exam_service_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+            - name: DB_USERNAME
+              value: "root"
+            - name: DB_PASSWORD
+              value: "root"
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: JWT_SECRET
+              value: "vdt_cloud_phase1_jwt_secret_key_long_enough_32_bytes"
+            - name: INTERNAL_SERVICE_TOKEN
+              value: "change-me-internal-service-token"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: "guest"
+            - name: RABBITMQ_PASSWORD
+              value: "guest"
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://eureka-server:8761/eureka/"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m"
+            - name: OTEL_SERVICE_NAME
+              value: "exam-service"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://tempo:4318"
+          volumeMounts:
+            - name: agents-volume
+              mountPath: /agents
+      volumes:
+        - name: agents-volume
+          hostPath:
+            path: /home/nguyentridung20044/mid-project-135890-main/agents
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: exam-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8082
+      targetPort: 8082
+  selector:
+    app: exam-service
+
+---
+# ───────────────────────────────────────────────────────────────────────
+# 3. QUESTION SERVICE
+# ───────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: question-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: question-service
+  template:
+    metadata:
+      labels:
+        app: question-service
+    spec:
+      containers:
+        - name: question-service
+          image: 35.185.187.150:8000/root/question-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8083
+          env:
+            - name: SERVER_PORT
+              value: "8083"
+            - name: DB_URL
+              value: "jdbc:mysql://question-db:3306/question_service_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+            - name: DB_USERNAME
+              value: "root"
+            - name: DB_PASSWORD
+              value: "root"
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: JWT_SECRET
+              value: "vdt_cloud_phase1_jwt_secret_key_long_enough_32_bytes"
+            - name: AI_PROVIDER
+              value: "gemini"
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: quiz-secrets
+                  key: GEMINI_API_KEY
+            - name: GEMINI_MODEL
+              value: "gemini-3.1-flash-lite-preview"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: quiz-secrets
+                  key: OPENAI_API_KEY
+            - name: OPENAI_MODEL
+              value: "gpt-4.1-mini"
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://eureka-server:8761/eureka/"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m"
+            - name: OTEL_SERVICE_NAME
+              value: "question-service"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://tempo:4318"
+          volumeMounts:
+            - name: agents-volume
+              mountPath: /agents
+      volumes:
+        - name: agents-volume
+          hostPath:
+            path: /home/nguyentridung20044/mid-project-135890-main/agents
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: question-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8083
+      targetPort: 8083
+  selector:
+    app: question-service
+
+---
+# ───────────────────────────────────────────────────────────────────────
+# 4. RESULT SERVICE
+# ───────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: result-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: result-service
+  template:
+    metadata:
+      labels:
+        app: result-service
+    spec:
+      containers:
+        - name: result-service
+          image: 35.185.187.150:8000/root/result-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8084
+          env:
+            - name: SERVER_PORT
+              value: "8084"
+            - name: DB_URL
+              value: "jdbc:mysql://result-db:3306/result_service_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+            - name: DB_USERNAME
+              value: "root"
+            - name: DB_PASSWORD
+              value: "root"
+            - name: JWT_SECRET
+              value: "vdt_cloud_phase1_jwt_secret_key_long_enough_32_bytes"
+            - name: INTERNAL_SERVICE_TOKEN
+              value: "change-me-internal-service-token"
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: "guest"
+            - name: RABBITMQ_PASSWORD
+              value: "guest"
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://eureka-server:8761/eureka/"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m"
+            - name: OTEL_SERVICE_NAME
+              value: "result-service"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://tempo:4318"
+          volumeMounts:
+            - name: agents-volume
+              mountPath: /agents
+      volumes:
+        - name: agents-volume
+          hostPath:
+            path: /home/nguyentridung20044/mid-project-135890-main/agents
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: result-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8084
+      targetPort: 8084
+  selector:
+    app: result-service
+
+---
+# ───────────────────────────────────────────────────────────────────────
+# 5. NOTIFICATION SERVICE
+# ───────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+        - name: notification-service
+          image: 35.185.187.150:8000/root/notification-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8086
+          env:
+            - name: SERVER_PORT
+              value: "8086"
+            - name: JWT_SECRET
+              value: "vdt_cloud_phase1_jwt_secret_key_long_enough_32_bytes"
+            - name: DB_URL
+              value: "jdbc:mysql://notification-db:3306/notification_service_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+            - name: DB_USERNAME
+              value: "root"
+            - name: DB_PASSWORD
+              value: "root"
+            - name: MAIL_HOST
+              value: "smtp.gmail.com"
+            - name: MAIL_PORT
+              value: "587"
+            - name: MAIL_USERNAME
+              value: "nguyentridung200444@gmail.com"
+            - name: MAIL_PASSWORD
+              value: "urzahqnllzgiegrw"
+            - name: MAIL_FROM_EMAIL
+              value: "nguyentridung200444@gmail.com"
+            - name: MAIL_FROM_NAME
+              value: "E-Mid Quiz System"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: "guest"
+            - name: RABBITMQ_PASSWORD
+              value: "guest"
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://eureka-server:8761/eureka/"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m"
+            - name: OTEL_SERVICE_NAME
+              value: "notification-service"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://tempo:4318"
+          volumeMounts:
+            - name: agents-volume
+              mountPath: /agents
+      volumes:
+        - name: agents-volume
+          hostPath:
+            path: /home/nguyentridung20044/mid-project-135890-main/agents
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8086
+      targetPort: 8086
+  selector:
+    app: notification-service
+
+---
+# ───────────────────────────────────────────────────────────────────────
+# 6. CLASS SERVICE
+# ───────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: class-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: class-service
+  template:
+    metadata:
+      labels:
+        app: class-service
+    spec:
+      containers:
+        - name: class-service
+          image: 35.185.187.150:8000/root/class-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8087
+          env:
+            - name: SERVER_PORT
+              value: "8087"
+            - name: DB_URL
+              value: "jdbc:mysql://class-db:3306/class_service_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+            - name: DB_USERNAME
+              value: "root"
+            - name: DB_PASSWORD
+              value: "root"
+            - name: JWT_SECRET
+              value: "vdt_cloud_phase1_jwt_secret_key_long_enough_32_bytes"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: "guest"
+            - name: RABBITMQ_PASSWORD
+              value: "guest"
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://eureka-server:8761/eureka/"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/agents/opentelemetry-javaagent.jar -Xmx256m"
+            - name: OTEL_SERVICE_NAME
+              value: "class-service"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://tempo:4318"
+          volumeMounts:
+            - name: agents-volume
+              mountPath: /agents
+      volumes:
+        - name: agents-volume
+          hostPath:
+            path: /home/nguyentridung20044/mid-project-135890-main/agents
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: class-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8087
+      targetPort: 8087
+  selector:
+    app: class-service
