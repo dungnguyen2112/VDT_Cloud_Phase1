@@ -1,155 +1,193 @@
-# E-Mid Quiz System
+# E-Mid Quiz System — DevOps & Observability Infrastructure
 
-[![Stars](https://img.shields.io/github/stars/hungdn1701/microservices-assignment-starter?style=social)](https://github.com/hungdn1701/microservices-assignment-starter/stargazers)
-[![Forks](https://img.shields.io/github/forks/hungdn1701/microservices-assignment-starter?style=social)](https://github.com/hungdn1701/microservices-assignment-starter/network/members)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
-> Một nền tảng thi trắc nghiệm giữa kỳ dựa trên kiến trúc microservices, hỗ trợ quản lý lớp học, ngân hàng câu hỏi, vòng đời bài thi, chấm điểm và thông báo.
+Tài liệu này tập trung vào thiết kế kiến trúc hạ tầng, quy trình tích hợp/triển khai liên tục (CI/CD) và hệ thống giám sát khả năng quan sát (Observability Stack) của dự án **E-Mid Quiz System**.
 
 ---
 
-## Team Members
+## 1. Sơ đồ Kiến trúc Tổng thể (System Architecture)
 
-| Name           | Student ID | Role   | Contribution                                                                                                                                                                               |
-|----------------|------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Nguyễn Trí Dũng | B22DCCN135 | Leader | Triển khai Auth, Exam, Result, Notification Services. <br/>Triển khai RabbitMQ events, Resilience4j, anti-cheat, OpenFeign, tích hơp Gemini API, OpenAI API. <br/>Code frontend, viết báo cáo |
-| Đoàn Thảo Vân | B22DCCN890 | Member | Triển khai Gateway, Eureka, Question, Class Services. <br/> Triển khai Redis caching, tổng hợp Swagger. <br/> Code frontend, viết báo cáo. |
-
----
-
-## Business Process
-
-**Domain**: Hệ thống Đánh giá và Khảo thí Trực tuyến (Online Education Assessment / E-Learning). Domain này tập trung vào việc số hóa hoàn toàn quy trình kiểm tra, thi giữa kỳ/cuối kỳ (midterm/final) và đánh giá năng lực học viên trong môi trường giáo dục đại học hoặc trung tâm đào tạo. Quá trình này bao gồm việc chuyển đổi từ khâu nghiệp vụ đào tạo như quản lý ngân hàng câu hỏi đa dạng (trắc nghiệm, phân loại category), xây dựng cấu trúc bài thi linh hoạt, quản lý chu kỳ sống (lifecycle) của bài thi, đến việc tự động hóa quá trình giám sát, chấm điểm và trả kết quả. 
-
-**Business process** :
-1. **Định danh (Identity)**: Người dùng đăng ký, xác thực email, đăng nhập; giảng viên và sinh viên nhận quyền JWT.
-2. **Quản lý lớp học (Class management)**: Giảng viên tạo lớp học và chia sẻ mã tham gia; sinh viên tham gia bằng mã.
-3. **Nội dung (Content)**: Giảng viên duy trì **ngân hàng câu hỏi** (CRUD, import, tùy chọn sinh câu hỏi bằng AI).
-4. **Vòng đời bài thi (Exam lifecycle)**: Giảng viên tạo bài thi nháp, đính kèm câu hỏi, **xuất bản** (thiết lập thời gian, quy tắc).
-5. **Làm bài (Attempt)**: Sinh viên bắt đầu làm bài (server theo dõi phiên qua Redis), trả lời, nộp bài.
-6. **Chấm điểm & Toàn vẹn (Scoring & integrity)**: Hệ thống chấm điểm tự động, lưu kết quả và sự kiện **vi phạm** tùy chọn (chống gian lận); nộp bài lũy đẳng.
-7. **Thông báo (Notifications)**: Sự kiện (xuất bản bài thi, nộp bài, thêm người dùng vào lớp...) kích hoạt thông báo **trong ứng dụng** (và qua **email** tùy chọn).
-
-**Actors** :
-- **Sinh viên (Student)**: Người tiêu thụ nội dung chính. Tham gia lớp học, tiếp nhận bài thi, thực thi bài thi trong thời gian giới hạn và nhận điểm số/thông báo.
-- **Giảng viên (Instructor)**: Người hoạch định. Thiết lập khuôn khổ khóa học, phát triển hệ thống câu hỏi, xây dựng luật lệ thi và có quyền truy xuất xem toàn bộ điểm số, vi phạm (reports).
-- **Hệ thống (System Automations)**: Các worker ngầm đảm nhiệm chức năng tự chấm điểm, gửi mail bất đồng bộ, dọn dẹp các session hết hạn và ghi log vi phạm.
-
-**Scope** : Chỉ tập trung vào quy trình thi trực tuyến (không bao gồm các tính năng ERP, tuyển sinh hay thư viện). Kiến trúc: frontend (React/Vite) → API gateway → 6 microservices (DB per service) + Redis + RabbitMQ + Eureka.
-
----
-
-## Architecture
+Hệ thống được thiết kế theo kiến trúc Microservices chạy trên môi trường lai (Hybrid): Các dịch vụ ứng dụng và giám sát chạy trong cụm **Kubernetes (K3s)**, trong khi các cơ sở dữ liệu và hạ tầng trung gian chạy trực tiếp trên **Docker Host** bên ngoài để đảm bảo tính an toàn dữ liệu.
 
 ```mermaid
-graph LR
-    U[User] --> FE[Frontend :3000]
-    FE --> GW[API Gateway :8080]
+graph TD
+    %% Client & Routing
+    User([Thí sinh / Giảng viên]) -->|1. Truy cập| FE[Frontend: React/Vite :3000]
+    FE -->|2. Gọi API| GW[API Gateway: Spring Cloud Gateway :8080]
 
-    GW --> AU[Auth Service]
-    GW --> CL[Class Service]
-    GW --> EX[Exam Service]
-    GW --> QS[Question Service]
-    GW --> RS[Result Service]
-    GW --> NS[Notification Service]
+    %% Service Registry
+    GW -. Service Discovery .-> Eureka[Eureka Server Registry :8761]
 
-    AU --> ADB[(Auth DB)]
-    CL --> CDB[(Class DB)]
-    EX --> EDB[(Exam DB)]
-    QS --> QDB[(Question DB)]
-    RS --> RDB[(Result DB)]
-    NS --> NDB[(Notification DB)]
+    subgraph k8s ["Kubernetes (K3s Cluster - Stateless Services)"]
+        GW
+        Eureka
+        
+        %% Microservices
+        Auth[auth-service :8081]
+        Class[class-service :8087]
+        Exam[exam-service :8082]
+        Question[question-service :8083]
+        Result[result-service :8084]
+        Notif[notification-service :8086]
+        
+        GW --> Auth
+        GW --> Class
+        GW --> Exam
+        GW --> Question
+        GW --> Result
+        GW --> Notif
+    end
 
-    EX --> REDIS[(Redis)]
-    QS --> REDIS
-    RS --> REDIS
+    subgraph db_infra ["Databases & Middleware (Docker Host - Stateful)"]
+        MySQL[(MySQL DB Cluster: Ports 3306-3312)]
+        Redis[(Redis Cache: 6379)]
+        RabbitMQ[(RabbitMQ Event Broker: 5672)]
+    end
 
-    EX --> MQ[(RabbitMQ)]
-    CL --> MQ
-    RS --> MQ
-    NS --> MQ
+    %% External database routing via selector-less services
+    Auth -->|External Route| MySQL
+    Class -->|External Route| MySQL
+    Exam -->|External Route| MySQL
+    Question -->|External Route| MySQL
+    Result -->|External Route| MySQL
+    Notif -->|External Route| MySQL
 
-    GW -.service discovery.-> EU[Eureka Server :8761]
-    AU -.register.-> EU
-    CL -.register.-> EU
-    EX -.register.-> EU
-    QS -.register.-> EU
-    RS -.register.-> EU
-    NS -.register.-> EU
+    %% Middleware connections
+    Exam -.-> Redis
+    Question -.-> Redis
+    Result -.-> Redis
+    
+    Exam -->|Publish Event| RabbitMQ
+    Class -->|Publish Event| RabbitMQ
+    Result -->|Publish Event| RabbitMQ
+    RabbitMQ -->|Consume Event| Notif
+
+    subgraph obs ["Observability Stack (Docker / K3s)"]
+        Prometheus[Prometheus: Metrics Aggregator :9090]
+        FluentBit[Fluent Bit: Log Collector]
+        Loki[Loki: Logs Database :3100]
+        Tempo[Tempo: Trace Database :3200]
+        Grafana[Grafana Dashboard :3001]
+    end
+
+    %% Observability flows
+    Prometheus -->|Cào metrics /actuator/prometheus| GW & Auth & Class & Exam & Question & Result & Notif
+    FluentBit -->|Gom JSON logs từ containers| Loki
+    GW & Auth & Class & Exam & Question & Result & Notif -->|Xuất OTel Traces| Tempo
+    
+    Grafana -->|Query Traces| Tempo
+    Grafana -->|Query Logs| Loki
+    Grafana -->|Query Metrics| Prometheus
 ```
-
-| Component | Responsibility | Tech Stack | Port |
-|-----------|----------------|------------|------|
-| **Frontend** | Giao diện người dùng cuối | React + Vite + Nginx | 3000 |
-| **Gateway** | Điểm trung chuyển, định tuyến, kiểm tra JWT, CORS | Spring Cloud Gateway | 8080 |
-| **Eureka Server** | Đăng ký và khám phá dịch vụ | Spring Cloud Netflix Eureka | 8761 |
-| **Auth Service** | Đăng ký, đăng nhập, xác minh danh tính | Spring Boot + MySQL | 8081 (internal) |
-| **Exam Service** | Quản lý vòng đời và thiết lập bài thi | Spring Boot + MySQL + Redis | 8082 (internal) |
-| **Question Service** | Ngân hàng câu hỏi, import, AI tạo câu hỏi | Spring Boot + MySQL + Redis | 8083 (internal) |
-| **Result Service** | Chấm điểm, phản hồi và lưu trữ kết quả | Spring Boot + MySQL + Redis | 8084 (internal) |
-| **Notification Service** | Xử lý và gửi các sự kiện thông báo | Spring Boot + MySQL + RabbitMQ | 8086 (internal) |
-| **Class Service** | Quản lý thông tin lớp học và học viên | Spring Boot + MySQL + RabbitMQ | 8087 (internal) |
-| **Redis** | Hỗ trợ lưu trữ cache/session chạy thực | Redis 7 | 6379 |
-| **RabbitMQ** | Trục sự kiện giữa các microservices | RabbitMQ 3 Management | 5672 / 15672 |
-
-> Tài liệu tham khảo kiến trúc đầy đủ: [`docs/architecture.md`](docs/architecture.md) · [`docs/analysis-and-design.md`](docs/analysis-and-design.md)
 
 ---
 
-## Getting Started
+## 2. Hướng dẫn Triển khai ở Môi trường Phát triển (Local Development)
 
+### 2.1 Chuẩn bị tệp môi trường `.env`
+Sao chép tệp mẫu cấu hình sang `.env` và thiết lập các tham số về mật khẩu, cổng kết nối, API Key cho AI (Gemini, OpenAI) và cấu hình gửi Email:
 ```bash
-# Clone và khởi tạo
-git clone https://github.com/jnp2018/mid-project-135890.git
-cd mid-project-135890
 cp .env.example .env
-
-# Build và chạy hệ thống
-docker compose up --build
 ```
+*(Lưu ý: Tệp `.env` đã được cấu hình trong `.gitignore` để đảm bảo bảo mật và không bị đẩy lên GitHub).*
 
-### Verify
+### 2.2 Khởi chạy bằng Docker Compose
+Dự án cung cấp hai tệp compose để khởi chạy linh hoạt:
 
-```bash
-# Gateway health
-curl http://localhost:8080/actuator/health
+* **Phương án 1: Chỉ chạy hạ tầng nền tảng (Database, Middleware, Monitoring)**
+  Phù hợp khi bạn muốn tự chạy và debug các dịch vụ Spring Boot/React bằng IDE dưới local:
+  ```bash
+  docker compose -f docker-compose-infra.yml up -d
+  ```
 
-# Truy cập bảng điều khiển Eureka bằng trình duyệt
-curl http://localhost:8761/
-
-# Kiểm tra trạng thái Public service (được map ra host)
-curl http://localhost:8081/health   # Auth Service
-
-# Kiểm tra trạng thái Internal service (chạy curl trong container)
-curl http://localhost:8082/health
-curl http://localhost:8083/health
-curl http://localhost:8084/health
-curl http://localhost:8086/health
-curl http://localhost:8087/health
-
-# Kiểm tra trạng thái các container docker
-docker compose ps
-```
+* **Phương án 2: Chạy toàn bộ hệ thống (Cả hạ tầng lẫn ứng dụng)**
+  Dựng đầy đủ tất cả các dịch vụ nghiệp vụ và giao diện người dùng:
+  ```bash
+  docker compose up --build -d
+  ```
 
 ---
 
-## API Documentation
+## 3. Triển khai Production trên cụm Kubernetes (K3s)
 
-### Service API Specifications
+Thư mục `k8s/` chứa toàn bộ các file khai báo tài nguyên (manifests) chạy trên production:
 
-- [Auth Service](docs/api-specs/auth-service.yaml) — Đăng ký, đăng nhập vòng đời người dùng, xác thực email
-- [Question Service](docs/api-specs/question-service.yaml) — Khởi tạo và quản lý ngân hàng câu hỏi
-- [Exam Service](docs/api-specs/exam-service.yaml) — Quản lý vòng đời bài thi, lượt làm bài của sinh viên
-- [Result Service](docs/api-specs/result-service.yaml) — Theo dõi kết quả và tính điểm từng bài làm
-- [Notification Service](docs/api-specs/notification-service.yaml) — Hệ thống gửi thông báo sự kiện, email cảnh báo
-- [Class Service](docs/api-specs/class-service.yaml) — Theo dõi, thêm bớt danh sách thành viên và lớp học
+### 3.1 Liên kết Cơ sở Dữ liệu Ngoài cụm (External Services Routing)
+Để tránh rủi ro mất mát dữ liệu và quá tải khi chạy Database trong Kubernetes, toàn bộ cơ sở dữ liệu MySQL được chạy ở ngoài cụm (trên Docker Host của VM GCP). 
+Dự án sử dụng cấu hình **Selector-less Service** kết hợp với **Endpoints** thủ công trong [k8s/external-services.yaml](file:///c:/mid-project-135890-main/k8s/external-services.yaml):
+* **Service:** Định nghĩa một Hostname nội bộ (ví dụ: `auth-db`, `question-db`).
+* **Endpoints:** Ánh xạ tên Hostname nội bộ này ra địa chỉ IP vật lý của máy ảo (`HOST_IP`) cùng cổng MySQL tương ứng (ví dụ: `3306` cho Auth, `3307` cho Question...).
+* **Lợi ích:** Các microservice trong K8s chỉ cần trỏ tới JDBC URL dạng `jdbc:mysql://auth-db:3306/...` mà không cần biết địa chỉ IP thật của máy chủ bên ngoài.
 
-> Danh sách API được liệt kê **theo từng dịch vụ**. Vui lòng sử dụng Swagger UI có sẵn của mỗi dịch vụ để kiểm thử khi chạy tự thân qua local (tham khảo file `readme.md` riêng của dịch vụ).
+### 3.2 Bảo mật Khóa và Mật khẩu (Kubernetes Secrets)
+Để vượt qua cơ chế kiểm duyệt bảo mật của GitHub (không lộ khóa API của Gemini và OpenAI trên git), dự án sử dụng đối tượng **Kubernetes Secret** tên là `quiz-secrets`:
+* Trong [k8s/services.yaml](file:///c:/mid-project-135890-main/k8s/services.yaml), các khóa nhạy cảm được nạp động từ Secret thông qua `valueFrom`:
+  ```yaml
+  - name: GEMINI_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: quiz-secrets
+        key: GEMINI_API_KEY
+  ```
+* Secret `quiz-secrets` sẽ được tạo và đồng bộ tự động bởi quy trình CI/CD từ tệp `.env` an toàn trên VM trước mỗi lượt deploy.
 
 ---
 
-## License
+## 4. Quy trình Tích hợp và Triển khai liên tục (CI/CD Pipeline)
 
-This project uses the [MIT License](LICENSE).
+Toàn bộ quy trình được tự động hóa qua tệp [.gitlab-ci.yml](file:///c:/mid-project-135890-main/.gitlab-ci.yml) trên GitLab CE nội bộ:
 
-> Template by [Hung Dang](https://github.com/hungdn1701) · [Template guide](GETTING_STARTED.md)
+```
+[ Commit / Merge Request ]
+           │
+           ▼
+┌──────────────────────────────────────┐
+│ STAGE 1: Test & Quality Gate         │ ──► Chạy Unit Test trên Runner, nếu có
+└──────────────────────────────────────┘     lỗi sẽ BLOCK tiến trình merge/triển khai.
+           │
+           ▼
+┌──────────────────────────────────────┐
+│ STAGE 2: Build & Package Docker      │ ──► Build Multi-stage image và gắn tag Commit SHA,
+└──────────────────────────────────────┘     đăng nhập và push lên Harbor Private Registry.
+           │
+           ▼
+┌──────────────────────────────────────┐
+│ STAGE 3: Deploy to K3s               │ ──► 1. Đồng bộ tệp .env thành K8s Secret.
+└──────────────────────────────────────┘     2. Áp dụng manifest và Rolling Update không downtime.
+```
+
+### Chi tiết các Stage:
+1. **Stage `test`:**
+   Chạy lệnh `mvn clean test` cho từng dịch vụ. Một tập lệnh **Quality Gate** (chốt chặn chất lượng) bằng Bash script sẽ kiểm tra mã lỗi thoát (Exit Code) để đưa ra quyết định có cho phép Merge Code hay không.
+2. **Stage `build`:**
+   Docker CLI sẽ tự động thực hiện build và đóng gói ứng dụng. Sau đó đăng nhập và đẩy (push) image lên **Harbor Private Registry** đặt tại `35.185.187.150:8000`.
+3. **Stage `deploy`:**
+   * Tự động tạo/đồng bộ Secret bằng lệnh:
+     `kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -`
+   * Áp dụng cấu hình Manifests mới nhất lên cụm: `kubectl apply -f k8s/services.yaml`
+   * Triển khai cập nhật cuốn chiếu không gây gián đoạn dịch vụ (**Zero-Downtime Rolling Update**) bằng lệnh:
+     `kubectl rollout restart deployment/<service-name>`
+
+---
+
+## 5. Hệ thống Giám sát & Phân tích lỗi (Observability Stack)
+
+Hệ thống cung cấp khả năng quan sát toàn diện trạng thái vận hành của các Microservices thông qua **3 trụ cột dữ liệu (Telemetry Data)** tích hợp về Grafana Dashboard:
+
+### 5.1 Metrics (Prometheus)
+* Các dịch vụ Spring Boot mở cổng đo lường hiệu năng `/actuator/prometheus` thông qua thư viện Micrometer.
+* **Prometheus** định kỳ 15 giây cào (Pull-based) dữ liệu về để giám sát sức khỏe dịch vụ, tỷ lệ lỗi (Error Rate) và thời gian phản hồi (Latency/Duration) theo mô hình đo lường **RED Method**.
+
+### 5.2 Centralized Logging (Loki & Fluent Bit)
+* **Log có cấu trúc (Structured Logging):** Các Java service được cấu hình sử dụng Logback để xuất ra log có cấu trúc dạng **JSON** gồm các trường `@timestamp`, `level`, `service_name`, `trace_id`, `span_id` và `message`.
+* **Thu thập Log:** **Fluent Bit** chạy dưới dạng log agent, tự động đọc tệp tin log của các container, phân tích cấu trúc JSON và đẩy về **Loki Backend** tập trung (Port 3100).
+
+### 5.3 Distributed Tracing (Tempo & OpenTelemetry)
+* Dự án tích hợp **OpenTelemetry Java Agent** (`opentelemetry-javaagent.jar`) chạy ngầm cùng JVM của mỗi service.
+* Agent này tự động bắt các cuộc gọi mạng HTTP/gRPC, các truy vấn cơ sở dữ liệu (SQL queries), tự động sinh ra `Trace ID` và đẩy dữ liệu vết về **Tempo Backend** (cổng 4318 OTLP HTTP / 4317 OTLP gRPC).
+* **Lan truyền ngữ cảnh (Context Propagation):** Tracing context được lan truyền xuyên suốt qua các service thông qua HTTP Header chuẩn W3C (`traceparent`).
+
+### 5.4 Liên kết Dữ liệu (Correlation) để Khắc phục Sự cố (Debug)
+Dữ liệu được liên kết chặt chẽ trên Grafana bằng cách sử dụng **Trace ID**:
+1. **Metrics:** Giúp nhận diện và phát hiện hệ thống đang gặp lỗi (Ví dụ: Thấy biểu đồ Error Rate tăng đột biến ở API Gateway).
+2. **Tempo (Traces):** Bấm vào điểm lỗi trên biểu đồ để nhảy sang giao diện Tracing. Biểu đồ thác nước (Waterfall Chart) của Tempo sẽ chỉ rõ request đó đi qua những service nào và bị tắc nghẽn/timeout ở service nào (Ví dụ: Lỗi nghẽn tại `result-service`).
+3. **Loki (Logs):** Từ vết lỗi trên Tempo, hệ thống tự động lọc ra toàn bộ log của các service có chung `Trace ID` tương ứng để chỉ ra nguyên nhân chi tiết (Ví dụ: Log chỉ rõ lỗi `Connection Timeout` khi kết nối vào cơ sở dữ liệu MySQL).
