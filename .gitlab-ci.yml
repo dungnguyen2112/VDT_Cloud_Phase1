@@ -342,3 +342,33 @@ deploy-notification-service:
     - kubectl apply -f k8s/external-services.yaml
     - kubectl apply -f k8s/services.yaml
     - kubectl rollout restart deployment/notification-service
+
+install-argocd:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  script:
+    - export KUBECONFIG=~/.kube/config
+    - echo "=================================================="
+    - echo "🚀 Installing ArgoCD on K3s Cluster..."
+    - echo "=================================================="
+    - kubectl create namespace argocd || true
+    - kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+    - echo "=================================================="
+    - echo "🔓 Patching ArgoCD Server service to NodePort..."
+    - echo "=================================================="
+    - kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
+    - echo "=================================================="
+    - echo "🔑 Retrieving ArgoCD Initial Admin Password..."
+    - echo "=================================================="
+    - sleep 10 # Wait a bit for secrets to be created
+    - kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+    - echo ""
+    - echo "=================================================="
+    - echo "🌐 Retrieving ArgoCD Server NodePort URL..."
+    - echo "=================================================="
+    - NODE_PORT=$(kubectl get svc argocd-server -n argocd -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}')
+    - echo "ArgoCD UI URL: http://35.185.187.150:$NODE_PORT"
+    - echo "=================================================="
+
