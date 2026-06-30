@@ -141,7 +141,8 @@ build-gateway:
   script:
     - cd gateway
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/gateway:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/gateway:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/gateway:latest" .
+    - docker push "$HARBOR_REGISTRY/root/gateway:$CI_COMMIT_SHORT_SHA"
     - docker push "$HARBOR_REGISTRY/root/gateway:latest"
 
 build-auth-service:
@@ -155,7 +156,8 @@ build-auth-service:
   script:
     - cd services/auth-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/auth-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/auth-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/auth-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/auth-service:$CI_COMMIT_SHORT_SHA"
     - docker push "$HARBOR_REGISTRY/root/auth-service:latest"
 
 build-class-service:
@@ -169,7 +171,8 @@ build-class-service:
   script:
     - cd services/class-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/class-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/class-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/class-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/class-service:$CI_COMMIT_SHORT_SHA"
     - docker push "$HARBOR_REGISTRY/root/class-service:latest"
 
 build-exam-service:
@@ -183,7 +186,8 @@ build-exam-service:
   script:
     - cd services/exam-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/exam-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/exam-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/exam-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/exam-service:$CI_COMMIT_SHORT_SHA"
     - docker push "$HARBOR_REGISTRY/root/exam-service:latest"
 
 build-question-service:
@@ -197,7 +201,8 @@ build-question-service:
   script:
     - cd services/question-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/question-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/question-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/question-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/question-service:$CI_COMMIT_SHORT_SHA"
     - docker push "$HARBOR_REGISTRY/root/question-service:latest"
 
 build-result-service:
@@ -211,7 +216,8 @@ build-result-service:
   script:
     - cd services/result-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/result-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/result-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/result-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/result-service:$CI_COMMIT_SHORT_SHA"
     - docker push "$HARBOR_REGISTRY/root/result-service:latest"
 
 build-notification-service:
@@ -225,7 +231,8 @@ build-notification-service:
   script:
     - cd services/notification-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/notification-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/notification-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/notification-service:latest" .
+    - docker push "$HARBOR_REGISTRY/root/notification-service:$CI_COMMIT_SHORT_SHA"
     - docker push "$HARBOR_REGISTRY/root/notification-service:latest"
 
 # ───────────────────────────────────────────────────────────────────────
@@ -243,9 +250,17 @@ deploy-gateway:
   script:
     - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
-    - kubectl apply -f k8s/external-services.yaml
-    - kubectl apply -f k8s/gateway.yaml
-    - kubectl rollout restart deployment/gateway
+    - git config --global --add safe.directory /home/nguyentridung20044/mid-project-135890-main || true
+    - git config --global user.email "runner@gitlab.com"
+    - git config --global user.name "GitLab Runner"
+    - 'git remote set-url origin http://oauth2:${GIT_PUSH_TOKEN}@35.185.187.150/root/vdt_cloud_phase1.git || true'
+    - git fetch origin main
+    - git checkout main
+    - git pull origin main
+    - 'sed -i "s|image: 35.185.187.150:8000/root/gateway:.*|image: 35.185.187.150:8000/root/gateway:$CI_COMMIT_SHORT_SHA|g" k8s/gateway.yaml'
+    - git add k8s/gateway.yaml
+    - 'git commit -m "deploy(gateway): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
+    - git push origin main
 
 deploy-auth-service:
   stage: deploy
@@ -259,9 +274,17 @@ deploy-auth-service:
     - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
     - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl apply -f k8s/external-services.yaml
-    - kubectl apply -f k8s/services.yaml
-    - kubectl rollout restart deployment/auth-service
+    - git config --global --add safe.directory /home/nguyentridung20044/mid-project-135890-main || true
+    - git config --global user.email "runner@gitlab.com"
+    - git config --global user.name "GitLab Runner"
+    - 'git remote set-url origin http://oauth2:${GIT_PUSH_TOKEN}@35.185.187.150/root/vdt_cloud_phase1.git || true'
+    - git fetch origin main
+    - git checkout main
+    - git pull origin main
+    - 'sed -i "s|image: 35.185.187.150:8000/root/auth-service:.*|image: 35.185.187.150:8000/root/auth-service:$CI_COMMIT_SHORT_SHA|g" k8s/services.yaml'
+    - git add k8s/services.yaml
+    - 'git commit -m "deploy(auth-service): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
+    - git push origin main
 
 deploy-class-service:
   stage: deploy
@@ -275,9 +298,17 @@ deploy-class-service:
     - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
     - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl apply -f k8s/external-services.yaml
-    - kubectl apply -f k8s/services.yaml
-    - kubectl rollout restart deployment/class-service
+    - git config --global --add safe.directory /home/nguyentridung20044/mid-project-135890-main || true
+    - git config --global user.email "runner@gitlab.com"
+    - git config --global user.name "GitLab Runner"
+    - 'git remote set-url origin http://oauth2:${GIT_PUSH_TOKEN}@35.185.187.150/root/vdt_cloud_phase1.git || true'
+    - git fetch origin main
+    - git checkout main
+    - git pull origin main
+    - 'sed -i "s|image: 35.185.187.150:8000/root/class-service:.*|image: 35.185.187.150:8000/root/class-service:$CI_COMMIT_SHORT_SHA|g" k8s/services.yaml'
+    - git add k8s/services.yaml
+    - 'git commit -m "deploy(class-service): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
+    - git push origin main
 
 deploy-exam-service:
   stage: deploy
@@ -291,9 +322,17 @@ deploy-exam-service:
     - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
     - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl apply -f k8s/external-services.yaml
-    - kubectl apply -f k8s/services.yaml
-    - kubectl rollout restart deployment/exam-service
+    - git config --global --add safe.directory /home/nguyentridung20044/mid-project-135890-main || true
+    - git config --global user.email "runner@gitlab.com"
+    - git config --global user.name "GitLab Runner"
+    - 'git remote set-url origin http://oauth2:${GIT_PUSH_TOKEN}@35.185.187.150/root/vdt_cloud_phase1.git || true'
+    - git fetch origin main
+    - git checkout main
+    - git pull origin main
+    - 'sed -i "s|image: 35.185.187.150:8000/root/exam-service:.*|image: 35.185.187.150:8000/root/exam-service:$CI_COMMIT_SHORT_SHA|g" k8s/services.yaml'
+    - git add k8s/services.yaml
+    - 'git commit -m "deploy(exam-service): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
+    - git push origin main
 
 deploy-question-service:
   stage: deploy
@@ -307,9 +346,17 @@ deploy-question-service:
     - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
     - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl apply -f k8s/external-services.yaml
-    - kubectl apply -f k8s/services.yaml
-    - kubectl rollout restart deployment/question-service
+    - git config --global --add safe.directory /home/nguyentridung20044/mid-project-135890-main || true
+    - git config --global user.email "runner@gitlab.com"
+    - git config --global user.name "GitLab Runner"
+    - 'git remote set-url origin http://oauth2:${GIT_PUSH_TOKEN}@35.185.187.150/root/vdt_cloud_phase1.git || true'
+    - git fetch origin main
+    - git checkout main
+    - git pull origin main
+    - 'sed -i "s|image: 35.185.187.150:8000/root/question-service:.*|image: 35.185.187.150:8000/root/question-service:$CI_COMMIT_SHORT_SHA|g" k8s/services.yaml'
+    - git add k8s/services.yaml
+    - 'git commit -m "deploy(question-service): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
+    - git push origin main
 
 deploy-result-service:
   stage: deploy
@@ -323,9 +370,17 @@ deploy-result-service:
     - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
     - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl apply -f k8s/external-services.yaml
-    - kubectl apply -f k8s/services.yaml
-    - kubectl rollout restart deployment/result-service
+    - git config --global --add safe.directory /home/nguyentridung20044/mid-project-135890-main || true
+    - git config --global user.email "runner@gitlab.com"
+    - git config --global user.name "GitLab Runner"
+    - 'git remote set-url origin http://oauth2:${GIT_PUSH_TOKEN}@35.185.187.150/root/vdt_cloud_phase1.git || true'
+    - git fetch origin main
+    - git checkout main
+    - git pull origin main
+    - 'sed -i "s|image: 35.185.187.150:8000/root/result-service:.*|image: 35.185.187.150:8000/root/result-service:$CI_COMMIT_SHORT_SHA|g" k8s/services.yaml'
+    - git add k8s/services.yaml
+    - 'git commit -m "deploy(result-service): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
+    - git push origin main
 
 deploy-notification-service:
   stage: deploy
@@ -339,36 +394,15 @@ deploy-notification-service:
     - export KUBECONFIG=~/.kube/config
     - cd /home/nguyentridung20044/mid-project-135890-main
     - kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl apply -f k8s/external-services.yaml
-    - kubectl apply -f k8s/services.yaml
-    - kubectl rollout restart deployment/notification-service
-
-install-argocd:
-  stage: deploy
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual
-  script:
-    - export KUBECONFIG=~/.kube/config
-    - echo "=================================================="
-    - echo "🚀 Installing ArgoCD on K3s Cluster..."
-    - echo "=================================================="
-    - kubectl create namespace argocd || true
-    - kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-    - echo "=================================================="
-    - echo "🔓 Patching ArgoCD Server service to NodePort..."
-    - echo "=================================================="
-    - kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
-    - echo "=================================================="
-    - echo "🔑 Retrieving ArgoCD Initial Admin Password..."
-    - echo "=================================================="
-    - sleep 10 # Wait a bit for secrets to be created
-    - kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
-    - echo ""
-    - echo "=================================================="
-    - echo "🌐 Retrieving ArgoCD Server NodePort URL..."
-    - echo "=================================================="
-    - NODE_PORT=$(kubectl get svc argocd-server -n argocd -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}')
-    - echo "ArgoCD UI URL: http://35.185.187.150:$NODE_PORT"
-    - echo "=================================================="
+    - git config --global --add safe.directory /home/nguyentridung20044/mid-project-135890-main || true
+    - git config --global user.email "runner@gitlab.com"
+    - git config --global user.name "GitLab Runner"
+    - 'git remote set-url origin http://oauth2:${GIT_PUSH_TOKEN}@35.185.187.150/root/vdt_cloud_phase1.git || true'
+    - git fetch origin main
+    - git checkout main
+    - git pull origin main
+    - 'sed -i "s|image: 35.185.187.150:8000/root/notification-service:.*|image: 35.185.187.150:8000/root/notification-service:$CI_COMMIT_SHORT_SHA|g" k8s/services.yaml'
+    - git add k8s/services.yaml
+    - 'git commit -m "deploy(notification-service): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
+    - git push origin main
 

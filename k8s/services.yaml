@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: auth-service
-          image: 35.185.187.150:8000/root/auth-service:latest
+          image: 35.185.187.150:8000/root/auth-service:__TAG__
           imagePullPolicy: Always
           ports:
             - containerPort: 8081
@@ -95,7 +95,7 @@ spec:
     spec:
       containers:
         - name: exam-service
-          image: 35.185.187.150:8000/root/exam-service:latest
+          image: 35.185.187.150:8000/root/exam-service:__TAG__
           imagePullPolicy: Always
           ports:
             - containerPort: 8082
@@ -181,7 +181,7 @@ spec:
     spec:
       containers:
         - name: question-service
-          image: 35.185.187.150:8000/root/question-service:latest
+          image: 35.185.187.150:8000/root/question-service:__TAG__
           imagePullPolicy: Always
           ports:
             - containerPort: 8083
@@ -271,7 +271,7 @@ spec:
     spec:
       containers:
         - name: result-service
-          image: 35.185.187.150:8000/root/result-service:latest
+          image: 35.185.187.150:8000/root/result-service:__TAG__
           imagePullPolicy: Always
           ports:
             - containerPort: 8084
@@ -355,7 +355,7 @@ spec:
     spec:
       containers:
         - name: notification-service
-          image: 35.185.187.150:8000/root/notification-service:latest
+          image: 35.185.187.150:8000/root/notification-service:__TAG__
           imagePullPolicy: Always
           ports:
             - containerPort: 8086
@@ -445,7 +445,7 @@ spec:
     spec:
       containers:
         - name: class-service
-          image: 35.185.187.150:8000/root/class-service:latest
+          image: 35.185.187.150:8000/root/class-service:__TAG__
           imagePullPolicy: Always
           ports:
             - containerPort: 8087
