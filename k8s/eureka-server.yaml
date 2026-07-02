@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: eureka-server
-          image: 35.185.187.150:8000/root/eureka-server:latest
+          image: 35.185.187.150:8000/root/eureka-server:__TAG__
           imagePullPolicy: Always
           ports:
             - containerPort: 8761

@@ -31,6 +31,25 @@ test-gateway:
     - export JWT_SECRET="$JWT_SECRET"
     - mvn clean test
 
+test-eureka-server:
+  stage: test
+  rules:
+    - changes:
+        - eureka-server/**/*
+        - .gitlab-ci.yml
+  script:
+    - cd eureka-server
+    - mvn clean test
+
+test-frontend:
+  stage: test
+  rules:
+    - changes:
+        - frontend/**/*
+        - .gitlab-ci.yml
+  script:
+    - docker run --rm -v "$CI_PROJECT_DIR/frontend:/src:ro" -w /work node:20-alpine sh -c "cp -R /src/. /work && npm install && npm run build"
+
 test-auth-service:
   stage: test
   rules:
@@ -141,9 +160,36 @@ build-gateway:
   script:
     - cd gateway
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/gateway:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/gateway:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/gateway:$CI_COMMIT_SHORT_SHA" .
     - docker push "$HARBOR_REGISTRY/root/gateway:$CI_COMMIT_SHORT_SHA"
-    - docker push "$HARBOR_REGISTRY/root/gateway:latest"
+
+build-eureka-server:
+  stage: build
+  rules:
+    - changes:
+        - eureka-server/**/*
+        - .gitlab-ci.yml
+  needs:
+    - test-eureka-server
+  script:
+    - cd eureka-server
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
+    - docker build -t "$HARBOR_REGISTRY/root/eureka-server:$CI_COMMIT_SHORT_SHA" .
+    - docker push "$HARBOR_REGISTRY/root/eureka-server:$CI_COMMIT_SHORT_SHA"
+
+build-frontend:
+  stage: build
+  rules:
+    - changes:
+        - frontend/**/*
+        - .gitlab-ci.yml
+  needs:
+    - test-frontend
+  script:
+    - cd frontend
+    - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
+    - docker build -t "$HARBOR_REGISTRY/root/frontend:$CI_COMMIT_SHORT_SHA" .
+    - docker push "$HARBOR_REGISTRY/root/frontend:$CI_COMMIT_SHORT_SHA"
 
 build-auth-service:
   stage: build
@@ -156,9 +202,8 @@ build-auth-service:
   script:
     - cd services/auth-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/auth-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/auth-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/auth-service:$CI_COMMIT_SHORT_SHA" .
     - docker push "$HARBOR_REGISTRY/root/auth-service:$CI_COMMIT_SHORT_SHA"
-    - docker push "$HARBOR_REGISTRY/root/auth-service:latest"
 
 build-class-service:
   stage: build
@@ -171,9 +216,8 @@ build-class-service:
   script:
     - cd services/class-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/class-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/class-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/class-service:$CI_COMMIT_SHORT_SHA" .
     - docker push "$HARBOR_REGISTRY/root/class-service:$CI_COMMIT_SHORT_SHA"
-    - docker push "$HARBOR_REGISTRY/root/class-service:latest"
 
 build-exam-service:
   stage: build
@@ -186,9 +230,8 @@ build-exam-service:
   script:
     - cd services/exam-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/exam-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/exam-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/exam-service:$CI_COMMIT_SHORT_SHA" .
     - docker push "$HARBOR_REGISTRY/root/exam-service:$CI_COMMIT_SHORT_SHA"
-    - docker push "$HARBOR_REGISTRY/root/exam-service:latest"
 
 build-question-service:
   stage: build
@@ -201,9 +244,8 @@ build-question-service:
   script:
     - cd services/question-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/question-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/question-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/question-service:$CI_COMMIT_SHORT_SHA" .
     - docker push "$HARBOR_REGISTRY/root/question-service:$CI_COMMIT_SHORT_SHA"
-    - docker push "$HARBOR_REGISTRY/root/question-service:latest"
 
 build-result-service:
   stage: build
@@ -216,9 +258,8 @@ build-result-service:
   script:
     - cd services/result-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/result-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/result-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/result-service:$CI_COMMIT_SHORT_SHA" .
     - docker push "$HARBOR_REGISTRY/root/result-service:$CI_COMMIT_SHORT_SHA"
-    - docker push "$HARBOR_REGISTRY/root/result-service:latest"
 
 build-notification-service:
   stage: build
@@ -231,9 +272,8 @@ build-notification-service:
   script:
     - cd services/notification-service
     - docker login -u "$HARBOR_USER" -p "$HARBOR_PASSWORD" "$HARBOR_REGISTRY"
-    - docker build -t "$HARBOR_REGISTRY/root/notification-service:$CI_COMMIT_SHORT_SHA" -t "$HARBOR_REGISTRY/root/notification-service:latest" .
+    - docker build -t "$HARBOR_REGISTRY/root/notification-service:$CI_COMMIT_SHORT_SHA" .
     - docker push "$HARBOR_REGISTRY/root/notification-service:$CI_COMMIT_SHORT_SHA"
-    - docker push "$HARBOR_REGISTRY/root/notification-service:latest"
 
 # ───────────────────────────────────────────────────────────────────────
 # STAGE 3: TRIỂN KHAI LÊN KUBERNETES CLUSTER (K3s)
@@ -260,6 +300,52 @@ deploy-gateway:
     - 'sed -i "s|image: 35.185.187.150:8000/root/gateway:.*|image: 35.185.187.150:8000/root/gateway:$CI_COMMIT_SHORT_SHA|g" k8s/gateway.yaml'
     - git add k8s/gateway.yaml
     - 'git commit -m "deploy(gateway): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
+    - git push origin main
+
+deploy-eureka-server:
+  stage: deploy
+  rules:
+    - changes:
+        - eureka-server/**/*
+        - .gitlab-ci.yml
+  needs:
+    - build-eureka-server
+  script:
+    - export KUBECONFIG=~/.kube/config
+    - cd /home/nguyentridung20044/mid-project-135890-main
+    - git config --global --add safe.directory /home/nguyentridung20044/mid-project-135890-main || true
+    - git config --global user.email "runner@gitlab.com"
+    - git config --global user.name "GitLab Runner"
+    - 'git remote set-url origin http://oauth2:${GIT_PUSH_TOKEN}@35.185.187.150/root/vdt_cloud_phase1.git || true'
+    - git fetch origin main
+    - git checkout main
+    - git pull origin main
+    - 'sed -i "s|image: 35.185.187.150:8000/root/eureka-server:.*|image: 35.185.187.150:8000/root/eureka-server:$CI_COMMIT_SHORT_SHA|g" k8s/eureka-server.yaml'
+    - git add k8s/eureka-server.yaml
+    - 'git commit -m "deploy(eureka-server): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
+    - git push origin main
+
+deploy-frontend:
+  stage: deploy
+  rules:
+    - changes:
+        - frontend/**/*
+        - .gitlab-ci.yml
+  needs:
+    - build-frontend
+  script:
+    - export KUBECONFIG=~/.kube/config
+    - cd /home/nguyentridung20044/mid-project-135890-main
+    - git config --global --add safe.directory /home/nguyentridung20044/mid-project-135890-main || true
+    - git config --global user.email "runner@gitlab.com"
+    - git config --global user.name "GitLab Runner"
+    - 'git remote set-url origin http://oauth2:${GIT_PUSH_TOKEN}@35.185.187.150/root/vdt_cloud_phase1.git || true'
+    - git fetch origin main
+    - git checkout main
+    - git pull origin main
+    - 'sed -i "s|image: 35.185.187.150:8000/root/frontend:.*|image: 35.185.187.150:8000/root/frontend:$CI_COMMIT_SHORT_SHA|g" k8s/frontend.yaml'
+    - git add k8s/frontend.yaml
+    - 'git commit -m "deploy(frontend): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
     - git push origin main
 
 deploy-auth-service:
@@ -405,4 +491,3 @@ deploy-notification-service:
     - git add k8s/services.yaml
     - 'git commit -m "deploy(notification-service): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes to commit"'
     - git push origin main
-

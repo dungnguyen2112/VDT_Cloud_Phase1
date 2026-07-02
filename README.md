@@ -1,193 +1,299 @@
-# E-Mid Quiz System — DevOps & Observability Infrastructure
+# E-Mid Quiz System - DevOps CI/CD & Observability
 
-Tài liệu này tập trung vào thiết kế kiến trúc hạ tầng, quy trình tích hợp/triển khai liên tục (CI/CD) và hệ thống giám sát khả năng quan sát (Observability Stack) của dự án **E-Mid Quiz System**.
+Tai lieu nay tom tat phan ha tang DevOps cua du an E-Mid Quiz System: CI/CD tren GitLab, quan ly image bang Harbor, CD theo GitOps voi ArgoCD, trien khai tren K3s va giam sat bang Prometheus, Loki, Tempo, Grafana.
 
----
+## 1. Kien Truc Tong The
 
-## 1. Sơ đồ Kiến trúc Tổng thể (System Architecture)
+He thong duoc trien khai theo mo hinh hybrid tren Google Cloud Platform VM `35.185.187.150`.
 
-Hệ thống được thiết kế theo kiến trúc Microservices chạy trên môi trường lai (Hybrid): Các dịch vụ ứng dụng và giám sát chạy trong cụm **Kubernetes (K3s)**, trong khi các cơ sở dữ liệu và hạ tầng trung gian chạy trực tiếp trên **Docker Host** bên ngoài để đảm bảo tính an toàn dữ liệu.
+### K3s Cluster - Stateless Apps
 
-```mermaid
-graph TD
-    %% Client & Routing
-    User([Thí sinh / Giảng viên]) -->|1. Truy cập| FE[Frontend: React/Vite :3000]
-    FE -->|2. Gọi API| GW[API Gateway: Spring Cloud Gateway :8080]
+K3s chay cac workload ung dung:
 
-    %% Service Registry
-    GW -. Service Discovery .-> Eureka[Eureka Server Registry :8761]
+- `frontend`
+- `api-gateway`
+- `eureka-server`
+- 6 backend services: `auth-service`, `class-service`, `exam-service`, `question-service`, `result-service`, `notification-service`
+- `argocd` controller
 
-    subgraph k8s ["Kubernetes (K3s Cluster - Stateless Services)"]
-        GW
-        Eureka
-        
-        %% Microservices
-        Auth[auth-service :8081]
-        Class[class-service :8087]
-        Exam[exam-service :8082]
-        Question[question-service :8083]
-        Result[result-service :8084]
-        Notif[notification-service :8086]
-        
-        GW --> Auth
-        GW --> Class
-        GW --> Exam
-        GW --> Question
-        GW --> Result
-        GW --> Notif
-    end
+K3s dam nhiem cac co che Kubernetes quan trong nhu Deployment, Service, rolling update va self-healing.
 
-    subgraph db_infra ["Databases & Middleware (Docker Host - Stateful)"]
-        MySQL[(MySQL DB Cluster: Ports 3306-3312)]
-        Redis[(Redis Cache: 6379)]
-        RabbitMQ[(RabbitMQ Event Broker: 5672)]
-    end
+### Docker Compose - Platform & Stateful Components
 
-    %% External database routing via selector-less services
-    Auth -->|External Route| MySQL
-    Class -->|External Route| MySQL
-    Exam -->|External Route| MySQL
-    Question -->|External Route| MySQL
-    Result -->|External Route| MySQL
-    Notif -->|External Route| MySQL
+Docker Compose chay cac thanh phan nen tang/stateful:
 
-    %% Middleware connections
-    Exam -.-> Redis
-    Question -.-> Redis
-    Result -.-> Redis
-    
-    Exam -->|Publish Event| RabbitMQ
-    Class -->|Publish Event| RabbitMQ
-    Result -->|Publish Event| RabbitMQ
-    RabbitMQ -->|Consume Event| Notif
+- Database & middleware: MySQL, Redis, RabbitMQ
+- CI/CD & registry: GitLab Server/Runner, Harbor Registry
+- Observability stack: Prometheus, Loki, Tempo, Grafana, Fluent Bit
 
-    subgraph obs ["Observability Stack (Docker / K3s)"]
-        Prometheus[Prometheus: Metrics Aggregator :9090]
-        FluentBit[Fluent Bit: Log Collector]
-        Loki[Loki: Logs Database :3100]
-        Tempo[Tempo: Trace Database :3200]
-        Grafana[Grafana Dashboard :3001]
-    end
+Ly do tach nhu vay: K3s phu hop voi stateless apps can rolling update/self-healing, con Docker Compose phu hop voi database, registry va monitoring stack tren mot VM tai nguyen gioi han.
 
-    %% Observability flows
-    Prometheus -->|Cào metrics /actuator/prometheus| GW & Auth & Class & Exam & Question & Result & Notif
-    FluentBit -->|Gom JSON logs từ containers| Loki
-    GW & Auth & Class & Exam & Question & Result & Notif -->|Xuất OTel Traces| Tempo
-    
-    Grafana -->|Query Traces| Tempo
-    Grafana -->|Query Logs| Loki
-    Grafana -->|Query Metrics| Prometheus
+## 2. Cong Nghe Su Dung
+
+| Cong nghe | Vai tro |
+| --- | --- |
+| GitLab | Luu source code, Kubernetes manifests va kich hoat CI/CD pipeline |
+| GitLab Runner | Thuc thi cac job test, build, deploy trong `.gitlab-ci.yml` |
+| Docker | Dong goi tung service thanh container image |
+| Harbor | Private registry luu image theo Git commit SHA |
+| K3s | Lightweight Kubernetes de chay cac ung dung stateless |
+| ArgoCD | GitOps controller, dong bo manifest tu Git xuong K3s |
+| Prometheus | Thu thap metrics tu `/actuator/prometheus` |
+| Loki | Luu logs tap trung |
+| Fluent Bit | Gom log tu container/pod va day ve Loki |
+| Tempo | Luu distributed traces |
+| OpenTelemetry | Tao trace/span cho cac Java services |
+| Grafana | Dashboard, Explore va Alerting |
+
+## 3. Luong CI/CD Hien Tai
+
+Toan bo pipeline duoc cau hinh trong `.gitlab-ci.yml`.
+
+```text
+Developer push code
+        |
+        v
+GitLab CI/CD pipeline
+        |
+        v
+Test stage
+        |
+        v
+Build Docker image with Git commit SHA tag
+        |
+        v
+Push image to Harbor
+        |
+        v
+Update image tag in k8s/*.yaml
+        |
+        v
+Commit and push manifest back to GitLab
+        |
+        v
+ArgoCD detects Git change
+        |
+        v
+ArgoCD syncs manifests to K3s
+        |
+        v
+K3s pulls image from Harbor and performs rolling update
 ```
 
----
+### Test Stage
 
-## 2. Hướng dẫn Triển khai ở Môi trường Phát triển (Local Development)
+Backend Java services chay:
 
-### 2.1 Chuẩn bị tệp môi trường `.env`
-Sao chép tệp mẫu cấu hình sang `.env` và thiết lập các tham số về mật khẩu, cổng kết nối, API Key cho AI (Gemini, OpenAI) và cấu hình gửi Email:
 ```bash
-cp .env.example .env
-```
-*(Lưu ý: Tệp `.env` đã được cấu hình trong `.gitignore` để đảm bảo bảo mật và không bị đẩy lên GitHub).*
-
-### 2.2 Khởi chạy bằng Docker Compose
-Dự án cung cấp hai tệp compose để khởi chạy linh hoạt:
-
-* **Phương án 1: Chỉ chạy hạ tầng nền tảng (Database, Middleware, Monitoring)**
-  Phù hợp khi bạn muốn tự chạy và debug các dịch vụ Spring Boot/React bằng IDE dưới local:
-  ```bash
-  docker compose -f docker-compose-infra.yml up -d
-  ```
-
-* **Phương án 2: Chạy toàn bộ hệ thống (Cả hạ tầng lẫn ứng dụng)**
-  Dựng đầy đủ tất cả các dịch vụ nghiệp vụ và giao diện người dùng:
-  ```bash
-  docker compose up --build -d
-  ```
-
----
-
-## 3. Triển khai Production trên cụm Kubernetes (K3s)
-
-Thư mục `k8s/` chứa toàn bộ các file khai báo tài nguyên (manifests) chạy trên production:
-
-### 3.1 Liên kết Cơ sở Dữ liệu Ngoài cụm (External Services Routing)
-Để tránh rủi ro mất mát dữ liệu và quá tải khi chạy Database trong Kubernetes, toàn bộ cơ sở dữ liệu MySQL được chạy ở ngoài cụm (trên Docker Host của VM GCP). 
-Dự án sử dụng cấu hình **Selector-less Service** kết hợp với **Endpoints** thủ công trong [k8s/external-services.yaml](file:///c:/mid-project-135890-main/k8s/external-services.yaml):
-* **Service:** Định nghĩa một Hostname nội bộ (ví dụ: `auth-db`, `question-db`).
-* **Endpoints:** Ánh xạ tên Hostname nội bộ này ra địa chỉ IP vật lý của máy ảo (`HOST_IP`) cùng cổng MySQL tương ứng (ví dụ: `3306` cho Auth, `3307` cho Question...).
-* **Lợi ích:** Các microservice trong K8s chỉ cần trỏ tới JDBC URL dạng `jdbc:mysql://auth-db:3306/...` mà không cần biết địa chỉ IP thật của máy chủ bên ngoài.
-
-### 3.2 Bảo mật Khóa và Mật khẩu (Kubernetes Secrets)
-Để vượt qua cơ chế kiểm duyệt bảo mật của GitHub (không lộ khóa API của Gemini và OpenAI trên git), dự án sử dụng đối tượng **Kubernetes Secret** tên là `quiz-secrets`:
-* Trong [k8s/services.yaml](file:///c:/mid-project-135890-main/k8s/services.yaml), các khóa nhạy cảm được nạp động từ Secret thông qua `valueFrom`:
-  ```yaml
-  - name: GEMINI_API_KEY
-    valueFrom:
-      secretKeyRef:
-        name: quiz-secrets
-        key: GEMINI_API_KEY
-  ```
-* Secret `quiz-secrets` sẽ được tạo và đồng bộ tự động bởi quy trình CI/CD từ tệp `.env` an toàn trên VM trước mỗi lượt deploy.
-
----
-
-## 4. Quy trình Tích hợp và Triển khai liên tục (CI/CD Pipeline)
-
-Toàn bộ quy trình được tự động hóa qua tệp [.gitlab-ci.yml](file:///c:/mid-project-135890-main/.gitlab-ci.yml) trên GitLab CE nội bộ:
-
-```
-[ Commit / Merge Request ]
-           │
-           ▼
-┌──────────────────────────────────────┐
-│ STAGE 1: Test & Quality Gate         │ ──► Chạy Unit Test trên Runner, nếu có
-└──────────────────────────────────────┘     lỗi sẽ BLOCK tiến trình merge/triển khai.
-           │
-           ▼
-┌──────────────────────────────────────┐
-│ STAGE 2: Build & Package Docker      │ ──► Build Multi-stage image và gắn tag Commit SHA,
-└──────────────────────────────────────┘     đăng nhập và push lên Harbor Private Registry.
-           │
-           ▼
-┌──────────────────────────────────────┐
-│ STAGE 3: Deploy to K3s               │ ──► 1. Đồng bộ tệp .env thành K8s Secret.
-└──────────────────────────────────────┘     2. Áp dụng manifest và Rolling Update không downtime.
+mvn clean test
 ```
 
-### Chi tiết các Stage:
-1. **Stage `test`:**
-   Chạy lệnh `mvn clean test` cho từng dịch vụ. Một tập lệnh **Quality Gate** (chốt chặn chất lượng) bằng Bash script sẽ kiểm tra mã lỗi thoát (Exit Code) để đưa ra quyết định có cho phép Merge Code hay không.
-2. **Stage `build`:**
-   Docker CLI sẽ tự động thực hiện build và đóng gói ứng dụng. Sau đó đăng nhập và đẩy (push) image lên **Harbor Private Registry** đặt tại `35.185.187.150:8000`.
-3. **Stage `deploy`:**
-   * Tự động tạo/đồng bộ Secret bằng lệnh:
-     `kubectl create secret generic quiz-secrets --from-env-file=.env --dry-run=client -o yaml | kubectl apply -f -`
-   * Áp dụng cấu hình Manifests mới nhất lên cụm: `kubectl apply -f k8s/services.yaml`
-   * Triển khai cập nhật cuốn chiếu không gây gián đoạn dịch vụ (**Zero-Downtime Rolling Update**) bằng lệnh:
-     `kubectl rollout restart deployment/<service-name>`
+Frontend chay build test trong Node container:
 
----
+```bash
+docker run --rm -v "$CI_PROJECT_DIR/frontend:/src:ro" -w /work node:20-alpine sh -c "cp -R /src/. /work && npm install && npm run build"
+```
 
-## 5. Hệ thống Giám sát & Phân tích lỗi (Observability Stack)
+### Build Stage
 
-Hệ thống cung cấp khả năng quan sát toàn diện trạng thái vận hành của các Microservices thông qua **3 trụ cột dữ liệu (Telemetry Data)** tích hợp về Grafana Dashboard:
+Moi service duoc build thanh Docker image va tag bang Git commit SHA:
 
-### 5.1 Metrics (Prometheus)
-* Các dịch vụ Spring Boot mở cổng đo lường hiệu năng `/actuator/prometheus` thông qua thư viện Micrometer.
-* **Prometheus** định kỳ 15 giây cào (Pull-based) dữ liệu về để giám sát sức khỏe dịch vụ, tỷ lệ lỗi (Error Rate) và thời gian phản hồi (Latency/Duration) theo mô hình đo lường **RED Method**.
+```bash
+docker build -t "$HARBOR_REGISTRY/root/gateway:$CI_COMMIT_SHORT_SHA" .
+docker push "$HARBOR_REGISTRY/root/gateway:$CI_COMMIT_SHORT_SHA"
+```
 
-### 5.2 Centralized Logging (Loki & Fluent Bit)
-* **Log có cấu trúc (Structured Logging):** Các Java service được cấu hình sử dụng Logback để xuất ra log có cấu trúc dạng **JSON** gồm các trường `@timestamp`, `level`, `service_name`, `trace_id`, `span_id` và `message`.
-* **Thu thập Log:** **Fluent Bit** chạy dưới dạng log agent, tự động đọc tệp tin log của các container, phân tích cấu trúc JSON và đẩy về **Loki Backend** tập trung (Port 3100).
+Pipeline hien tai khong build/push/deploy tag `latest`. Tat ca ban deploy deu dung immutable tag theo Git commit SHA.
 
-### 5.3 Distributed Tracing (Tempo & OpenTelemetry)
-* Dự án tích hợp **OpenTelemetry Java Agent** (`opentelemetry-javaagent.jar`) chạy ngầm cùng JVM của mỗi service.
-* Agent này tự động bắt các cuộc gọi mạng HTTP/gRPC, các truy vấn cơ sở dữ liệu (SQL queries), tự động sinh ra `Trace ID` và đẩy dữ liệu vết về **Tempo Backend** (cổng 4318 OTLP HTTP / 4317 OTLP gRPC).
-* **Lan truyền ngữ cảnh (Context Propagation):** Tracing context được lan truyền xuyên suốt qua các service thông qua HTTP Header chuẩn W3C (`traceparent`).
+### Deploy Stage
 
-### 5.4 Liên kết Dữ liệu (Correlation) để Khắc phục Sự cố (Debug)
-Dữ liệu được liên kết chặt chẽ trên Grafana bằng cách sử dụng **Trace ID**:
-1. **Metrics:** Giúp nhận diện và phát hiện hệ thống đang gặp lỗi (Ví dụ: Thấy biểu đồ Error Rate tăng đột biến ở API Gateway).
-2. **Tempo (Traces):** Bấm vào điểm lỗi trên biểu đồ để nhảy sang giao diện Tracing. Biểu đồ thác nước (Waterfall Chart) của Tempo sẽ chỉ rõ request đó đi qua những service nào và bị tắc nghẽn/timeout ở service nào (Ví dụ: Lỗi nghẽn tại `result-service`).
-3. **Loki (Logs):** Từ vết lỗi trên Tempo, hệ thống tự động lọc ra toàn bộ log của các service có chung `Trace ID` tương ứng để chỉ ra nguyên nhân chi tiết (Ví dụ: Log chỉ rõ lỗi `Connection Timeout` khi kết nối vào cơ sở dữ liệu MySQL).
+GitLab Runner khong deploy truc tiep vao K3s bang `kubectl apply`. Thay vao do, deploy job cap nhat image tag trong Kubernetes manifest.
+
+Vi du voi gateway:
+
+```bash
+sed -i "s|image: 35.185.187.150:8000/root/gateway:.*|image: 35.185.187.150:8000/root/gateway:$CI_COMMIT_SHORT_SHA|g" k8s/gateway.yaml
+git add k8s/gateway.yaml
+git commit -m "deploy(gateway): update image tag to $CI_COMMIT_SHORT_SHA [skip ci]"
+git push origin main
+```
+
+`[skip ci]` duoc dung de tranh tao vong lap pipeline moi khi commit deploy duoc push nguoc lai Git.
+
+## 4. Kubernetes Manifests
+
+Thu muc `k8s/` chua desired state cho K3s:
+
+- `k8s/frontend.yaml`: Frontend Deployment/Service
+- `k8s/gateway.yaml`: API Gateway Deployment/Service
+- `k8s/eureka-server.yaml`: Eureka Server Deployment/Service
+- `k8s/services.yaml`: 6 backend services
+- `k8s/external-services.yaml`: Service/Endpoints de ket noi tu K3s ra cac thanh phan Docker host nhu MySQL, Redis, RabbitMQ, Tempo
+
+Trong GitOps, cac file YAML nay la source of truth cho trang thai deploy.
+
+## 5. GitOps Voi ArgoCD
+
+ArgoCD chay trong K3s va quan ly application `quiz-system`.
+
+ArgoCD theo doi Git repository chua thu muc `k8s/`. Khi GitLab CI cap nhat image tag trong manifest va push len Git, ArgoCD phat hien desired state thay doi, sau do sync xuong K3s.
+
+Co che:
+
+- Git la desired state
+- K3s la actual state
+- ArgoCD so sanh hai trang thai
+- Neu khac nhau, app chuyen sang `OutOfSync`
+- Neu bat auto sync, ArgoCD tu dong sync/reconcile
+
+Loi ich:
+
+- GitLab Runner khong can quyen admin truc tiep vao cluster
+- Moi thay doi deploy deu co commit history
+- De audit va rollback
+- Ho tro self-healing khi cluster bi sua lech so voi Git
+
+## 6. Deployment Strategy
+
+He thong hien tai dung Rolling Update mac dinh cua Kubernetes Deployment.
+
+Khi image tag thay doi:
+
+```text
+ArgoCD sync manifest moi
+        |
+        v
+K3s tao pod moi voi image SHA moi
+        |
+        v
+Pod moi Ready
+        |
+        v
+Pod cu bi terminate dan
+```
+
+Du an hien chua dung Blue-Green hoac Canary deployment.
+
+## 7. Observability Stack
+
+### Metrics - Prometheus
+
+Spring Boot services expose metrics qua endpoint:
+
+```text
+/actuator/prometheus
+```
+
+Prometheus scrape metrics va cung cap du lieu cho Grafana dashboard/alert.
+
+### Logs - Fluent Bit & Loki
+
+Fluent Bit gom log tu container/pod, parse log JSON va day ve Loki. Loki giup query log tap trung thay vi SSH vao tung container.
+
+### Traces - OpenTelemetry & Tempo
+
+OpenTelemetry Java Agent duoc gan vao cac Java services de tao traces/spans. Trace duoc gui ve Tempo qua OTLP endpoint:
+
+```text
+http://tempo:4318
+```
+
+Service `tempo` trong K3s duoc map ra Tempo dang chay tren Docker host thong qua `k8s/external-services.yaml`.
+
+### Grafana
+
+Grafana ket noi toi:
+
+- Prometheus de xem metrics
+- Loki de xem logs
+- Tempo de xem traces
+
+Grafana cung duoc dung de tao alert rule va gui email khi he thong co loi.
+
+## 8. Alerting
+
+Alert hien tai canh bao ti le HTTP 5xx theo tung service.
+
+PromQL chinh:
+
+```promql
+100 *
+sum by (job) (
+  rate(http_server_requests_seconds_count{status=~"5.."}[1m])
+)
+/
+clamp_min(
+  sum by (job) (
+    rate(http_server_requests_seconds_count[1m])
+  ),
+  0.001
+)
+```
+
+Y nghia:
+
+- Tinh request loi `5xx` trong 1 phut
+- Chia cho tong request trong 1 phut
+- Nhan 100 de ra phan tram
+- `sum by (job)` giup biet service nao loi
+- `clamp_min(..., 0.001)` tranh chia cho 0
+
+Trong Grafana alert:
+
+- `A`: Prometheus query
+- `B`: Reduce ket qua query thanh mot gia tri
+- `C`: Threshold condition
+
+## 9. Troubleshooting Flow
+
+Khi co su co:
+
+```text
+Email Alert
+    |
+    v
+Grafana RED Metrics
+    |
+    v
+Tempo Trace ID
+    |
+    v
+Loki Logs by service_name/trace_id
+    |
+    v
+Find exception and fix code/config
+```
+
+Luong nay giup giam thoi gian tim loi vi khong can SSH vao tung container de doc log thu cong.
+
+## 10. Cau Lenh Kiem Tra Nhanh
+
+Kiem tra ArgoCD:
+
+```bash
+kubectl get ns
+kubectl get pods -n argocd
+kubectl get svc -n argocd
+kubectl get applications -n argocd
+```
+
+Kiem tra pod/service trong K3s:
+
+```bash
+kubectl get pods
+kubectl get svc
+kubectl get deployments
+```
+
+Restart Grafana sau khi doi provisioning/env:
+
+```bash
+docker compose -f docker-compose-infra.yml up -d --force-recreate grafana
+```
+
+## 11. Tom Tat De Bao Ve
+
+Mot cau tom tat:
+
+> GitLab CI/CD tu dong test va build image, Harbor luu image theo Git commit SHA, ArgoCD dong bo manifest tu Git xuong K3s theo GitOps, con Prometheus, Loki, Tempo va Grafana cung cap observability de phat hien, khoanh vung va xu ly loi sau trien khai.
+
